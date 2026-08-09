@@ -22,12 +22,9 @@ import { TokenStore } from '../quest/tokenStore.js';
 import { enableAutoquest, disableAutoquest, isAutoquestEnabled } from '../quest/autoquestStore.js';
 import { PREFIX } from '../utils/config.js';
 
-// ── TokenStore (shared instance via BOT_TOKEN as secret) ───────────────────
 export function makeTokenStore(secret) {
     return new TokenStore(secret);
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 function sanitizeToken(raw) {
     return raw.trim()
@@ -40,8 +37,6 @@ function sanitizeToken(raw) {
 function isValidUserToken(token) {
     return token.length >= 50 && /^[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+$/.test(token);
 }
-
-// ── UI Builders (Component V2) ─────────────────────────────────────────────
 
 function buildLinkModal() {
     const modal = new ModalBuilder()
@@ -60,13 +55,37 @@ function buildLinkModal() {
     return modal;
 }
 
+// ── Yahan humne text aur buttons ko ek sath set kar diya hai ────────────────
 function buildLinkPrompt() {
     const c = new ContainerBuilder().setAccentColor(0xFEE75C);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# 🔗 Token Required\nYou need to link your Discord token before using quest commands.\n\nClick **Link Token** below — a popup will appear where you can paste your token.\n\n**How to get your token:**\n\`1.\` Open Discord in your **browser** (not the app)\n\`2.\` Press \`Ctrl+Shift+I\` → **Network** tab → filter \`XHR\`\n\`3.\` Send any message, click the request, find \`Authorization\` in headers\n\`4.\` Copy that value and paste it into the popup\n\n> ⚠️ This is your **user token**, NOT your bot token.`,
+            `# 🔗 Token Required\nYou need to link your Discord token before using quest commands.\n\n### HOW TO FIND YOUR TOKEN\nPick your platform below:`,
         ),
     );
+    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+    
+    // 3no Buttons (PC, Android, iOS) yahan hain
+    c.addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('platform_pc')
+                .setLabel('PC')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('💻'),
+            new ButtonBuilder()
+                .setCustomId('platform_android')
+                .setLabel('Android')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('📱'),
+            new ButtonBuilder()
+                .setCustomId('platform_ios')
+                .setLabel('iOS')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('✨'),
+        ),
+    );
+
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
     c.addActionRowComponents(
         new ActionRowBuilder().addComponents(
@@ -124,7 +143,7 @@ function buildQuestSelectCard(quests) {
         const taskKey = Object.keys(tasks)[0] ?? '';
         const icon = ICONS[taskKey] ?? '⚙️';
         const exp = Math.floor(new Date(q.config.expires_at).getTime() / 1000);
-        return `**${i + 1}.** ${icon} **${q.config.messages.quest_name}**\n> *${q.config.messages.game_title}*  •  Expires <t:${exp}:R>`;
+        return `**${i + 1}.** ${icon} **${q.config.messages.quest_name}**\n> *${q.config.messages.game_title}* •  Expires <t:${exp}:R>`;
     }).join('\n\n');
 
     const c = new ContainerBuilder().setAccentColor(0x5865F2);
@@ -193,7 +212,7 @@ function buildQuestInfoCard(quest, phase, claimed = 0, failReason = '') {
     const daysLeft = Math.max(0, Math.ceil((new Date(cfg.expires_at).getTime() - Date.now()) / 86400000));
 
     const PHASE = {
-        starting: { color: 0x5865F2, title: '⚙️  Solving Quest...',  bar: '`░░░░░░░░░░`  **0%**  —  *Working on it...*' },
+        starting: { color: 0x5865F2, title: '⚙️  Solving Quest...',  bar: '`░░░░░░░░░░`  **0%** —  *Working on it...*' },
         done:     { color: 0x57F287, title: '✅  Quest Complete!',    bar: '`██████████`  **100%**' },
         failed:   { color: 0xED4245, title: '❌  Quest Failed',       bar: '' },
     };
@@ -217,7 +236,7 @@ function buildQuestInfoCard(quest, phase, claimed = 0, failReason = '') {
         new SectionBuilder()
             .addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(
-                    `# ${p.title}\n### ${msgs.quest_name}\n*${msgs.game_title}*  •  ${msgs.game_publisher}`,
+                    `# ${p.title}\n### ${msgs.quest_name}\n*${msgs.game_title}* •  ${msgs.game_publisher}`,
                 ),
             )
             .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbUrl)),
@@ -228,7 +247,7 @@ function buildQuestInfoCard(quest, phase, claimed = 0, failReason = '') {
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `📋 **Task**\n${taskLines.join('\n') || '*Unknown task*'}\n\n` +
-            `📅 **Expires**  <t:${expiresEpoch}:R>  *(${daysLeft}d left)*\n\n` +
+            `📅 **Expires** <t:${expiresEpoch}:R>  *(${daysLeft}d left)*\n\n` +
             `📊 **Progress**\n${progressText || '`░░░░░░░░░░`  0%'}\n\n` +
             `🎁 **Reward**\n${rewardLines.join('\n') || '*No rewards listed*'}`,
         ),
@@ -241,8 +260,6 @@ function buildQuestInfoCard(quest, phase, claimed = 0, failReason = '') {
 
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
-
-// ── Quest Runners ──────────────────────────────────────────────────────────
 
 async function runQuestOne(userId, tokenStore, send) {
     const token = tokenStore.get(userId);
@@ -417,7 +434,7 @@ async function runQuestList(userId, tokenStore, send) {
                 new SectionBuilder()
                     .addTextDisplayComponents(
                         new TextDisplayBuilder().setContent(
-                            `# ${st.icon}  ${msgs.quest_name}\n*${msgs.game_title}*  •  ${msgs.game_publisher}`,
+                            `# ${st.icon}  ${msgs.quest_name}\n*${msgs.game_title}* •  ${msgs.game_publisher}`,
                         ),
                     )
                     .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbUrl)),
@@ -500,8 +517,6 @@ async function runAutoquestToggle(userId, tokenStore, replyFn) {
     await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 });
 }
 
-// ── Slash + Prefix exports ─────────────────────────────────────────────────
-
 export const questCmd = {
     data: new SlashCommandBuilder().setName('quest').setDescription('Pick and complete one Discord quest'),
     prefix: 'quest',
@@ -520,7 +535,7 @@ export const questAllCmd = {
     prefix: 'questall',
     async execute(interaction, client) {
         await interaction.deferReply();
-        await runQuestAll(interaction.user.id, client.tokenStore, (opts) => interaction.followUp(opts));
+        await runQuestAll(interaction.user.id, ts, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
         await runQuestAll(message.author.id, client.tokenStore, (opts) => message.channel.send(opts));
@@ -562,8 +577,6 @@ export const autoquestCmd = {
         await runAutoquestToggle(message.author.id, client.tokenStore, (opts) => message.reply(opts));
     },
 };
-
-// ── Link / Unlink ──────────────────────────────────────────────────────────
 
 export const linkCmd = {
     data: new SlashCommandBuilder().setName('link').setDescription('Save your Discord token so you never have to enter it again'),
@@ -665,7 +678,6 @@ export const unlinkCmd = {
     },
 };
 
-// ── Modal Submit Handler (called from interactionCreate) ───────────────────
 export async function handleLinkModal(interaction, client) {
     const ts = client.tokenStore;
     const raw = interaction.fields.getTextInputValue('link_token_input');
@@ -707,12 +719,10 @@ export async function handleLinkModal(interaction, client) {
     await interaction.editReply({ components: [c], flags: MessageFlags.IsComponentsV2 });
 }
 
-// ── Button: link_prompt handler (called from interactionCreate) ────────────
 export async function handleLinkPromptButton(interaction) {
     await interaction.showModal(buildLinkModal());
 }
 
-// ── AutoQuest runner (called from questWatcher) ────────────────────────────
 export async function runAutoquestForUser(userId, quest, tokenStore, discordClient) {
     const token = tokenStore.get(userId);
     if (!token) { disableAutoquest(userId); return; }
