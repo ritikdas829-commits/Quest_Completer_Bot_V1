@@ -766,3 +766,29 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         }
     }
 }
+function buildPlatformSelectCard() {
+    const c = new ContainerBuilder().setAccentColor(0x5865F2);
+    
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("### HOW TO FIND YOUR TOKEN\npick your platform below")
+    );
+
+    c.addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('platform_pc')
+                .setLabel('PC')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('platform_android')
+                .setLabel('Android')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('platform_ios')
+                .setLabel('iOS')
+                .setStyle(ButtonStyle.Secondary)
+        )
+    );
+
+    return { components: [c], flags: MessageFlags.IsComponentsV2 };
+}
