@@ -766,29 +766,36 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         }
     }
 }
-function buildPlatformSelectCard() {
-    const c = new ContainerBuilder().setAccentColor(0x5865F2);
+function buildLinkPrompt() {
+    const c = new ContainerBuilder().setAccentColor(0xFEE75C);
     
+    // Yahan text aur buttons dono ek sath aa jayenge
     c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("### HOW TO FIND YOUR TOKEN\npick your platform below")
-    );
-
+        new TextDisplayBuilder().setContent(
+            `# 🔗 Token Required\nYou need to link your Discord token before using quest commands.\n\n### HOW TO FIND YOUR TOKEN\nPick your platform below:`
+        ),
+    );c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+    
+    // Yahan aapke 3no buttons add ho gaye hain
     c.addActionRowComponents(
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('platform_pc')
                 .setLabel('PC')
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('💻'),
             new ButtonBuilder()
                 .setCustomId('platform_android')
                 .setLabel('Android')
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('📱'),
             new ButtonBuilder()
                 .setCustomId('platform_ios')
                 .setLabel('iOS')
                 .setStyle(ButtonStyle.Secondary)
-        )
+                .setEmoji('✨')
+        ),
     );
-
+    
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
