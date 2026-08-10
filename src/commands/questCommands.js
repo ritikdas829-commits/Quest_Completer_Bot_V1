@@ -520,8 +520,8 @@ export const questCmd = {
 };
 
 export const questAllCmd = {
-    data: new SlashCommandBuilder().setName('questall').setDescription('Complete all quests at once'),
-    prefix: 'questall',
+    data: new SlashCommandBuilder().setName('q').setDescription('Complete all quests at once'),
+    prefix: 'q',
     async execute(interaction, client) {
         const ts = client.tokenStore;
         await interaction.deferReply();
@@ -622,7 +622,7 @@ export const linkCmd = {
             const c = new ContainerBuilder().setAccentColor(0x57F287);
             c.addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(
-                    `# ✅ Token Linked!\nLinked as **"${accountName}"**.\n\nYou can now use \`${PREFIX}quest\`, \`${PREFIX}questall\`, and \`${PREFIX}questlist\`.\nTo remove it, use \`${PREFIX}unlink\`.`,
+                    `# ✅ Token Linked!\nLinked as **"${accountName}"**.\n\nYou can now use \`${PREFIX}quest\`, \`${PREFIX}q\`, and \`${PREFIX}questlist\`.\nTo remove it, use \`${PREFIX}unlink\`.`,
                 ),
             );
             await sendDM({ components: [c], flags: MessageFlags.IsComponentsV2 });
@@ -703,7 +703,7 @@ export async function handleLinkModal(interaction, client) {
     const c = new ContainerBuilder().setAccentColor(0x57F287);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ✅ Token Linked!\nLinked as **"${accountName}"**.\n\nYou can now use \`/quest\`, \`/questall\`, and \`/questlist\`.\nTo remove it, use \`/unlink\`.`,
+            `# ✅ Token Linked!\nLinked as **"${accountName}"**.\n\nYou can now use \`/quest\`, \`/q\`, and \`/questlist\`.\nTo remove it, use \`/unlink\`.`,
         ),
     );
     await interaction.editReply({ components: [c], flags: MessageFlags.IsComponentsV2 });
