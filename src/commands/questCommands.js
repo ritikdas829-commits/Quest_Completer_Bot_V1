@@ -80,7 +80,7 @@ function buildLinkPrompt() {
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('link_prompt')
-                .setLabel('🔗 Link Token')
+                .setLabel('🔗 update Token')
                 .setStyle(ButtonStyle.Primary),
         ),
     );
