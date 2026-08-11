@@ -61,7 +61,7 @@ export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
     }
 }
 
-export function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
+export async function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
     // Direct bypass for Owner and Administrators
@@ -74,8 +74,34 @@ export function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
         return { allowed: true };
     }
 
+    // Real-time fallback: Server ke actual invites check karega agar memory mein count kam ho
+    try {
+        const invites = await member.guild.invites.fetch();
+        let totalUses = 0;
+        
+        invites.forEach(invite => {
+            if (invite.inviter && invite.inviter.id === user.id) {
+                totalUses += invite.uses;
+            }
+        });
+
+        // Agar aapke invites 2 ya usse zyada hain, toh role automatically de do aur access allow karo
+        if (totalUses >= 2) {
+            const targetRole = member.guild.roles.cache.get(REQUIRED_ROLE_ID);
+            if (targetRole && !member.roles.cache.has(targetRole.id)) {
+                await member.roles.add(targetRole).catch(() => {});
+            }
+            return { allowed: true };
+        }
+    } catch (err) {
+        console.error("Error checking real invites:", err);
+    }
+
+    const currentCount = userInvitesStore.get(user.id) || 0;
+    const progressText = `${Math.min(currentCount, 2)}/2 invites completed`;
+
     return { 
         allowed: false, 
-        message: `❌ You must complete **2 valid invites** first before using quest commands! (Fake IDs and rejoins are not counted).` 
+        message: `❌ You need the **Quest Access** role to use quest commands.\n\n📊 **Progress:** \`${progressText}\`\nComplete **2 invites** in the server to get this role automatically!` 
     };
 }
