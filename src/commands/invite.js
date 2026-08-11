@@ -10,7 +10,8 @@ export default {
                 .setRequired(false)
         ),
     
-    prefix: ['invite', 'i'],
+    // Change this line from an array to a single string to match standard command handlers
+    prefix: 'invite',
 
     async prefixExecute(message, args, client) {
         let targetUser = message.author;
