@@ -61,10 +61,9 @@ function buildHelp(user, client) {
         new TextDisplayBuilder().setContent(
             `🎮 **Quests**\n` +
             `\`/quest\`  \`${PREFIX}quest\` — Pick and complete one quest\n` +
-            `\`/q\`  \`${PREFIX} q \` — Complete all quests at once\n` +
+            `\`/q\`  \`${PREFIX}q\` — Complete all quests at once\n` +
             `\`/questlist\`  \`${PREFIX}questlist\` — View all your quests & status\n` +
             `\`/autoquest\`  \`${PREFIX}autoquest\` — Auto-complete new quests as they drop`,
-            `\`/invest  \`${PREFIX} i\` — Auto-complete new quests as they drop`,
         ),
     );
 
@@ -93,4 +92,4 @@ function buildHelp(user, client) {
     );
 
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
-}
+                                   }
