@@ -1,17 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ContainerBuilder,
-    TextDisplayBuilder,
-    SeparatorBuilder,
-    SeparatorSpacingSize,
-    SectionBuilder,
-    ThumbnailBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    MessageFlags,
-} from 'discord.js';
-import { getEmoji } from '../handlers/emoji.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { PREFIX } from '../utils/config.js';
 
 export default {
@@ -21,91 +8,47 @@ export default {
     prefix: ['help', 'h'],
 
     async execute(interaction) {
-        await interaction.reply(buildHelp(interaction.user, interaction.client));
+        await sendHelpMessage(interaction);
     },
 
     async prefixExecute(message, _a, client) {
-        await message.reply(buildHelp(message.author, client));
+        await sendHelpMessage(message);
     },
 };
 
-function buildHelp(user, client) {
-    const avatar = user.displayAvatarURL({ size: 128, extension: 'png' });
-    const botAvatar = client.user.displayAvatarURL({ size: 128, extension: 'png' });
-    const c = new ContainerBuilder().setAccentColor(0x5865F2);
+async function sendHelpMessage(context) {
+    const user = context.author || context.user;
+    const client = context.client;
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    c.addSectionComponents(
-        new SectionBuilder()
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(
-                    `# 🤖 Quest Bot\n-# Hey **${user.username}**, here's everything I can do`,
-                ),
-            )
-            .setThumbnailAccessory(new ThumbnailBuilder().setURL(botAvatar)),
-    );
+    const embed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle('🤖 Quest Bot Help Menu')
+        .setDescription(`Hey **${user.username}**, here's everything I can do:`)
+        .addFields(
+            {
+                name: '🔗 Token',
+                value: `\`/link\`  \`${PREFIX}link\` — Link your Discord user token\n\`/unlink\`  \`${PREFIX}unlink\` — Remove your saved token\n\`/tokencheck\`  \`${PREFIX}tokencheck\` — Check if your token is still valid`,
+                inline: false
+            },
+            {
+                name: '🎮 Quests',
+                value: `\`/quest\`  \`${PREFIX}quest\` — Pick and complete one quest\n\`/questall\`  \`${PREFIX}questall\` — Complete all quests at once\n\`/questlist\`  \`${PREFIX}questlist\` — View all your quests & status\n\`/autoquest\`  \`${PREFIX}autoquest\` — Auto-complete new quests as they drop`,
+                inline: false
+            },
+            {
+                name: '📊 Invite System',
+                value: `\`/invite\`  \`${PREFIX}invite\`  \`${PREFIX}i\` — Check your invite log and statistics\n\`/resetinvite\` — Reset a user's invite count (Admin Only)`,
+                inline: false
+            },
+            {
+                name: '🛠️ Utility',
+                value: `\`/ping\`  \`${PREFIX}ping\` — Check bot latency\n\`/help\`  \`${PREFIX}help\` — You're already here`,
+                inline: false
+            }
+        )
+        .setThumbnail(client.user.displayAvatarURL())
+        .setFooter({ text: `Serving ${client.guilds.cache.size} server(s) · Prefix: ${PREFIX}` });
 
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
-    // ── Token Section ────────────────────────────────────────────────────────
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `🔗 **Token**\n` +
-            `\`/link\`  \`${PREFIX}link\` — Link your Discord user token\n` +
-            `\`/unlink\`  \`${PREFIX}unlink\` — Remove your saved token\n` +
-            `\`/tokencheck\`  \`${PREFIX}tokencheck\` — Check if your token is still valid`,
-        ),
-    );
-
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
-    // ── Quest Section ────────────────────────────────────────────────────────
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `🎮 **Quests**\n` +
-            `\`/quest\`  \`${PREFIX}quest\` — Pick and complete one quest\n` +
-            `\`/questall\`  \`${PREFIX}questall\` — Complete all quests at once\n` +
-            `\`/questlist\`  \`${PREFIX}questlist\` — View all your quests & status\n` +
-            `\`/autoquest\`  \`${PREFIX}autoquest\` — Auto-complete new quests as they drop`,
-        ),
-    );
-
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
-    // ── Invite System Section ────────────────────────────────────────────────
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `📊 **Invite System**\n` +
-            `\`/invite\`  \`${PREFIX}invite\`  \`${PREFIX}i\` — Check your invite log and statistics\n` +
-            `\`/resetinvite\` — Reset a user's invite count (Admin Only)`,
-        ),
-    );
-
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
-    // ── Utility Section ──────────────────────────────────────────────────────
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `🛠️ **Utility**\n` +
-            `\`/ping\`  \`${PREFIX}ping\` — Check bot latency\n` +
-            `\`/help\`  \`${PREFIX}help\` — You're already here`,
-        ),
-    );
-
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
-    // ── Footer ───────────────────────────────────────────────────────────────
-    c.addSectionComponents(
-        new SectionBuilder()
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(
-                    `-# 🌐 Serving **${client.guilds.cache.size}** server(s)  ·  Prefix: \`${PREFIX}\``,
-                ),
-            )
-            .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
-    );
-
-    // ── Support Server Button Row ────────────────────────────────────────────
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setLabel('Join Support Server')
@@ -113,8 +56,9 @@ function buildHelp(user, client) {
             .setUrl('https://discord.gg/PFjuWa9zQH')
     );
 
-    return { 
-        components: [c, row], 
-        flags: MessageFlags.IsComponentsV2 
-    };
+    if (context.reply) {
+        await context.reply({ embeds: [embed], components: [row] });
+    } else {
+        await context.reply({ embeds: [embed], components: [row] });
+    }
 }
