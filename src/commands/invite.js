@@ -11,7 +11,7 @@ export default {
         ),
     
     // Change this line from an array to a single string to match standard command handlers
-    prefix: 'invite',
+    prefix: 'i',
 
     async prefixExecute(message, args, client) {
         let targetUser = message.author;
