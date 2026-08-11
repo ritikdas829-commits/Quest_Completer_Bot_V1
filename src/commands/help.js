@@ -6,6 +6,9 @@ import {
     SeparatorSpacingSize,
     SectionBuilder,
     ThumbnailBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
     MessageFlags,
 } from 'discord.js';
 import { getEmoji } from '../handlers/emoji.js';
@@ -15,7 +18,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('help')
         .setDescription('See all available commands'),
-    prefix: 'help',
+    prefix: ['help', 'h'],
 
     async execute(interaction) {
         await interaction.reply(buildHelp(interaction.user, interaction.client));
@@ -56,14 +59,25 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── Quest Section ────────────────────────────────────────────────────────
+    // ── Quest Section (Updated with .q) ──────────────────────────────────────
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `🎮 **Quests**\n` +
-            `\`/quest\`  \`${PREFIX}quest\` — Pick and complete one quest\n` +
+            `\`/quest\`  \`${PREFIX}quest\`  \`${PREFIX}q\` — Pick and complete one quest\n` +
             `\`/questall\`  \`${PREFIX}questall\` — Complete all quests at once\n` +
             `\`/questlist\`  \`${PREFIX}questlist\` — View all your quests & status\n` +
             `\`/autoquest\`  \`${PREFIX}autoquest\` — Auto-complete new quests as they drop`,
+        ),
+    );
+
+    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+
+    // ── Invite System Section (Updated with .i) ──────────────────────────────
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `📊 **Invite System**\n` +
+            `\`/invite\`  \`${PREFIX}invite\`  \`${PREFIX}i\` — Check your invite log and statistics\n` +
+            `\`/resetinvite\` — Reset a user's invite count (Admin Only)`,
         ),
     );
 
@@ -91,5 +105,16 @@ function buildHelp(user, client) {
             .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
     );
 
-    return { components: [c], flags: MessageFlags.IsComponentsV2 };
-        }
+    // ── Support Server Button Row ────────────────────────────────────────────
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setLabel('Join Support Server')
+            .setStyle(ButtonStyle.Link)
+            .setUrl('https://discord.gg/PFjuWa9zQH')
+    );
+
+    return { 
+        components: [c, row], 
+        flags: MessageFlags.IsComponentsV2 
+    };
+}
