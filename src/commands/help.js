@@ -72,7 +72,7 @@ function buildHelp(user, client) {
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `📊 **Invite System**\n` +
-            `\`/invite\`  \`${PREFIX}invite\`  \`${PREFIX}i\` — Check your invite log and statistics`,
+            `\`/invite\`  \`${PREFIX}i\` — Check your invite log and statistics`,
         ),
     );
 
