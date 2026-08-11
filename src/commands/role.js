@@ -43,7 +43,6 @@ export default {
                 config[guildId] = {};
             }
 
-            // Role ki ID aur Name dono save kar rahe hain taaki koi error na aaye
             config[guildId].questRoleId = selectedRole.id;
             config[guildId].questRoleName = selectedRole.name;
 
