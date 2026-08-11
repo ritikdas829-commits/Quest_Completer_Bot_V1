@@ -36,7 +36,7 @@ export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
         if (usedInvite && usedInvite.inviter) {
             const inviter = usedInvite.inviter;
 
-            // Fake ID / New account filter (3 din se kam purane account count nahi honge)
+            // Filter out fake or new accounts (accounts younger than 3 days)
             const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
             if (accountAgeDays < 3) return;
 
@@ -51,7 +51,7 @@ export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
                 if (inviterMember && targetRole && !inviterMember.roles.cache.has(targetRole.id)) {
                     await inviterMember.roles.add(targetRole);
                     try {
-                        await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and unlocked quest commands.`);
+                        await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and unlocked access to quest commands.`);
                     } catch {}
                 }
             }
@@ -64,19 +64,18 @@ export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
 export function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
-    // Owner aur Administrator ke liye direct bypass
+    // Direct bypass for Owner and Administrators
     if (user.id === OWNER_ID || member.permissions.has('Administrator')) {
         return { allowed: true };
     }
 
-    // Role check
+    // Check if user has the required role
     if (member.roles.cache.has(REQUIRED_ROLE_ID)) {
         return { allowed: true };
     }
 
     return { 
         allowed: false, 
-        message: `❌ Pehle aapko **2 invites** pure karne honge, tabhi aap quest commands use kar payenge! (Fake IDs aur rejoins count nahi hote).` 
+        message: `❌ You must complete **2 valid invites** first before using quest commands! (Fake IDs and rejoins are not counted).` 
     };
 }
-
