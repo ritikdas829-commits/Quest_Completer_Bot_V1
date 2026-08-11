@@ -6,9 +6,6 @@ import {
     SeparatorSpacingSize,
     SectionBuilder,
     ThumbnailBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
     MessageFlags,
 } from 'discord.js';
 import { getEmoji } from '../handlers/emoji.js';
@@ -18,7 +15,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('help')
         .setDescription('See all available commands'),
-    prefix: ['help', 'h'],
+    prefix: 'help',
 
     async execute(interaction) {
         await interaction.reply(buildHelp(interaction.user, interaction.client));
@@ -72,17 +69,6 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── Invite System Section (Added) ────────────────────────────────────────
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `📊 **Invite System**\n` +
-            `\`/invite\`  \`${PREFIX}invite\`  \`${PREFIX}i\` — Check your invite log and statistics\n` +
-            `\`/resetinvite\` — Reset a user's invite count (Admin Only)`,
-        ),
-    );
-
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
     // ── Utility Section ──────────────────────────────────────────────────────
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
@@ -105,16 +91,5 @@ function buildHelp(user, client) {
             .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
     );
 
-    // ── Support Server Button Row (Added) ────────────────────────────────────
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel('Join Support Server')
-            .setStyle(ButtonStyle.Link)
-            .setUrl('https://discord.gg/PFjuWa9zQH')
-    );
-
-    return { 
-        components: [c, row], 
-        flags: MessageFlags.IsComponentsV2 
-    };
-}
+    return { components: [c], flags: MessageFlags.IsComponentsV2 };
+        }
