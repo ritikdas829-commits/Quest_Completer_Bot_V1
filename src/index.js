@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
 import { makeTokenStore } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
+import { cacheGuildInvites, handleInviteJoin } from './handlers/inviteTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -50,6 +51,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildInvites,
     ],
     partials: [Partials.Message, Partials.Channel],
 });
@@ -57,6 +59,39 @@ const client = new Client({
 client.commands       = new Collection();
 client.prefixCommands = new Collection();
 client.tokenStore     = makeTokenStore(TOKEN);
+
+// Global variable taaki auto-created role ki ID store rahe
+global.AUTO_ROLE_ID = null;
+
+// Bot start hote hi invites cache karna aur auto-role check/create karna
+client.once('ready', async () => {
+    await cacheGuildInvites(client);
+    
+    // Har server mein check karega aur role bana lega agar nahi hai
+    client.guilds.cache.forEach(async (guild) => {
+        try {
+            let role = guild.roles.cache.find(r => r.name === 'Quest Access');
+            if (!role) {
+                role = await guild.roles.create({
+                    name: 'Quest Access',
+                    color: 'Blue',
+                    reason: 'Automatic role created by Quest Completer Bot for invite verification',
+                });
+                console.log(`[Auto-Role] Created 'Quest Access' role in guild: ${guild.name}`);
+            }
+            global.AUTO_ROLE_ID = role.id;
+        } catch (err) {
+            console.error(`Failed to create auto-role in guild ${guild.name}:`, err);
+        }
+    });
+
+    console.log('Invite tracker and Auto-Role system successfully initialized!');
+});
+
+client.on('guildMemberAdd', (member) => {
+    if (!global.AUTO_ROLE_ID) return;
+    handleInviteJoin(member, global.AUTO_ROLE_ID);
+});
 
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
