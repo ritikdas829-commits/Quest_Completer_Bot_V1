@@ -841,4 +841,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         }
     }
 }
-
