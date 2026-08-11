@@ -26,20 +26,47 @@ export function makeTokenStore(secret) {
     return new TokenStore(secret);
 }
 
-// --- Helper: Check if user has 'Quest Access' role in guilds ---
+// --- Helper: Check if user has 'Quest Access' role or is Administrator ---
 function checkUserAccess(member) {
-    if (!member) return true; // Agar DM ya fetch na ho paye toh allow karein ya apne hisaab se handle karein
+    if (!member) return true;
+    if (member.permissions.has('Administrator')) return true;
     return member.roles.cache.some(role => role.name === 'Quest Access');
 }
 
-async function sendAccessDenied(replyFn, isEphemeral = true) {
+async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
+    const member = interactionOrMessage.member;
+    const userId = member ? member.id : interactionOrMessage.author.id;
+    
+    // Calculate live invites for progress tracking
+    let currentInvites = 0;
+    try {
+        if (member && member.guild) {
+            const invites = await member.guild.invites.fetch().catch(() => null);
+            if (invites) {
+                const userInvites = invites.filter(inv => inv.inviter && inv.inviter.id === userId);
+                currentInvites = userInvites.reduce((acc, inv) => acc + inv.uses, 0);
+            }
+        }
+    } catch {}
+
+    const progressText = `${Math.min(currentInvites, 2)}/2 invites completed`;
+
     const c = new ContainerBuilder().setAccentColor(0xED4245);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ❌ Access Denied\nYou need the **Quest Access** role to use quest commands. Complete **2 invites** in the server to get this role automatically!`
+            `# ❌ Access Denied\nYou need the **Quest Access** role to use quest commands.\n\n📊 **Progress:** \`${progressText}\`\nComplete **2 invites** in the server to get this role automatically!`
         ),
     );
-    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 | (isEphemeral ? MessageFlags.Ephemeral : 0) });
+
+    const payload = { components: [c], flags: MessageFlags.IsComponentsV2 | (isEphemeral ? MessageFlags.Ephemeral : 0) };
+    
+    if (interactionOrMessage.reply && typeof interactionOrMessage.reply === 'function' && !interactionOrMessage.deferred) {
+        await interactionOrMessage.reply(payload);
+    } else if (interactionOrMessage.followUp) {
+        await interactionOrMessage.followUp(payload);
+    } else {
+        await interactionOrMessage.channel.send(payload);
+    }
 }
 
 function sanitizeToken(raw) {
@@ -525,13 +552,13 @@ export const questCmd = {
     data: new SlashCommandBuilder().setName('quest').setDescription('Pick and complete one Discord quest'),
     prefix: 'quest',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         const ts = client.tokenStore;
         await interaction.deferReply();
         await runQuestOne(interaction.user.id, ts, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         await runQuestOne(message.author.id, client.tokenStore, (opts) => message.channel.send(opts));
     },
 };
@@ -540,13 +567,13 @@ export const questAllCmd = {
     data: new SlashCommandBuilder().setName('q').setDescription('Complete all quests at once'),
     prefix: 'q',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         const ts = client.tokenStore;
         await interaction.deferReply();
         await runQuestAll(interaction.user.id, ts, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         await runQuestAll(message.author.id, client.tokenStore, (opts) => message.channel.send(opts));
     },
 };
@@ -555,12 +582,12 @@ export const questListCmd = {
     data: new SlashCommandBuilder().setName('questlist').setDescription('List all Discord quests and their status'),
     prefix: 'questlist',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply();
         await runQuestList(interaction.user.id, client.tokenStore, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         await runQuestList(message.author.id, client.tokenStore, (opts) => message.channel.send(opts));
     },
 };
@@ -569,12 +596,12 @@ export const tokenCheckCmd = {
     data: new SlashCommandBuilder().setName('tokencheck').setDescription('Check whether your saved Discord token is still valid'),
     prefix: 'tokencheck',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply({ flags: 64 });
         await runTokenCheck(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         await runTokenCheck(message.author.id, client.tokenStore, (opts) => message.reply(opts));
     },
 };
@@ -583,12 +610,12 @@ export const autoquestCmd = {
     data: new SlashCommandBuilder().setName('autoquest').setDescription('Auto-complete every new quest the moment it drops'),
     prefix: 'autoquest',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply({ flags: 64 });
         await runAutoquestToggle(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         await runAutoquestToggle(message.author.id, client.tokenStore, (opts) => message.reply(opts));
     },
 };
@@ -598,12 +625,12 @@ export const linkCmd = {
     prefix: 'link',
 
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         await interaction.showModal(buildLinkModal());
     },
 
     async prefixExecute(message, args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         const ts = client.tokenStore;
         const inlineToken = args.join('').trim();
 
@@ -665,7 +692,7 @@ export const unlinkCmd = {
     prefix: 'unlink',
 
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(opts => interaction.reply(opts)); return; }
+        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
         const ts = client.tokenStore;
         const removed = ts.remove(interaction.user.id);
         disableAutoquest(interaction.user.id);
@@ -681,7 +708,7 @@ export const unlinkCmd = {
     },
 
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(opts => message.reply(opts), false); return; }
+        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
         const ts = client.tokenStore;
         const removed = ts.remove(message.author.id);
         disableAutoquest(message.author.id);
