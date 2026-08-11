@@ -1,5 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'ejs'; // or discord.js
-import { PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -16,7 +15,6 @@ export default {
     async execute(messageOrInteraction, args, client) {
         let targetUser = messageOrInteraction.author || messageOrInteraction.user;
 
-        // Agar command mein kisi user ko mention kiya gaya hai
         if (messageOrInteraction.options) {
             const optionUser = messageOrInteraction.options.getUser('target');
             if (optionUser) targetUser = optionUser;
@@ -54,4 +52,3 @@ export default {
         }
     }
 };
-
