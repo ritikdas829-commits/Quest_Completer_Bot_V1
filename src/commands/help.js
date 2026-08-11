@@ -59,7 +59,7 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── Quest Section (Updated with .q) ──────────────────────────────────────
+    // ── Quest Section (.q added) ─────────────────────────────────────────────
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `🎮 **Quests**\n` +
@@ -72,7 +72,7 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── Invite System Section (Updated with .i) ──────────────────────────────
+    // ── Invite System Section (.i added) ─────────────────────────────────────
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `📊 **Invite System**\n` +
@@ -83,7 +83,7 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── Utility Section ──────────────────────────────────────────────────────
+    // ── Utility Section ────────────────────────────────______________________
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `🛠️ **Utility**\n` +
