@@ -49,12 +49,13 @@ async function sendHelpMessage(context) {
         .setThumbnail(client.user.displayAvatarURL())
         .setFooter({ text: `Serving ${client.guilds.cache.size} server(s) · Prefix: ${PREFIX}` });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel('Join Support Server')
-            .setStyle(ButtonStyle.Link)
-            .setUrl('https://discord.gg/PFjuWa9zQH')
-    );
+    // Button builder with correct method chain
+    const supportButton = new ButtonBuilder()
+        .setLabel('Join Support Server')
+        .setStyle(ButtonStyle.Link)
+        .setUrl('https://discord.gg/PFjuWa9zQH');
+
+    const row = new ActionRowBuilder().addComponents(supportButton);
 
     if (context.reply) {
         await context.reply({ embeds: [embed], components: [row] });
