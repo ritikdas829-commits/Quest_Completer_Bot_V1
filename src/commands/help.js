@@ -6,9 +6,6 @@ import {
     SeparatorSpacingSize,
     SectionBuilder,
     ThumbnailBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
     MessageFlags,
 } from 'discord.js';
 import { PREFIX } from '../utils/config.js';
@@ -103,16 +100,5 @@ function buildHelp(user, client) {
             .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
     );
 
-    // ── Support Server Button ────────────────────────────────────────────────
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel('Join Support Server')
-            .setStyle(ButtonStyle.Link)
-            .setUrl('https://discord.gg/PFjuWa9zQH')
-    );
-
-    return { 
-        components: [c, row], 
-        flags: MessageFlags.IsComponentsV2 
-    };
+    return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
