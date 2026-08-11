@@ -10,7 +10,7 @@ export default {
                 .setRequired(false)
         ),
     
-    prefix: 'invite',
+    prefix: ['invite', 'i'],
 
     async prefixExecute(message, args, client) {
         let targetUser = message.author;
@@ -39,9 +39,8 @@ async function sendInviteEmbed(context, targetUser) {
             }
         });
 
-        // Embed design jo screenshot jaisa dikhega
         const embed = new EmbedBuilder()
-            .setColor('#10b981') // Green/Teal accent color
+            .setColor('#10b981')
             .setTitle('Invite log')
             .setDescription(`» **${targetUser.username}** has **${totalUses}** invites`)
             .addFields(
