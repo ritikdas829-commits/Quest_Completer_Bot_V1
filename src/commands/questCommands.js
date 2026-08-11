@@ -17,6 +17,8 @@ import {
     MessageFlags,
     Colors,
 } from 'discord.js';
+import fs from 'fs';
+import path from 'path';
 import { QuestClient } from '../quest/questClient.js';
 import { TokenStore } from '../quest/tokenStore.js';
 import { enableAutoquest, disableAutoquest, isAutoquestEnabled } from '../quest/autoquestStore.js';
@@ -26,10 +28,28 @@ export function makeTokenStore(secret) {
     return new TokenStore(secret);
 }
 
-// --- Helper: Check if user has 'Quest Access' role or is Administrator ---
+// --- Helper: Check if user has the configured Quest Access role or is Administrator ---
 function checkUserAccess(member) {
     if (!member) return true;
     if (member.permissions.has('Administrator')) return true;
+
+    const guildId = member.guild.id;
+    const configPath = path.resolve('./config.json');
+
+    if (fs.existsSync(configPath)) {
+        try {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            const roleId = config[guildId]?.questRoleId;
+            
+            if (roleId) {
+                return member.roles.cache.has(roleId);
+            }
+        } catch (err) {
+            console.error('Config read error:', err);
+        }
+    }
+
+    // Fallback default role name check
     return member.roles.cache.some(role => role.name === 'Quest Access');
 }
 
@@ -37,7 +57,6 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     const member = interactionOrMessage.member;
     const userId = member ? member.id : interactionOrMessage.author.id;
     
-    // Calculate live invites for progress tracking
     let currentInvites = 0;
     try {
         if (member && member.guild) {
@@ -54,7 +73,7 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     const c = new ContainerBuilder().setAccentColor(0xED4245);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ❌ Access Denied\nYou need the **Quest Access** role to use quest commands.\n\n📊 **Progress:** \`${progressText}\`\nComplete **2 invites** in the server to get this role automatically!`
+            `# ❌ Access Denied\nYou need the required **Quest Access** role to use quest commands.\n\n📊 **Progress:** \`${progressText}\`\nComplete **2 invites** in the server to get this role automatically!`
         ),
     );
 
@@ -822,3 +841,4 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         }
     }
 }
+
