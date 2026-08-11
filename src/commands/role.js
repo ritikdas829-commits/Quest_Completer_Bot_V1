@@ -19,28 +19,46 @@ export default {
         ),
 
     async execute(interaction) {
-        const selectedRole = interaction.options.getRole('target');
-        const guildId = interaction.guild.id;
+        try {
+            const selectedRole = interaction.options.getRole('target');
+            const guildId = interaction.guild.id;
 
-        const configPath = path.resolve('./config.json');
-        
-        let config = {};
-        if (fs.existsSync(configPath)) {
-            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            if (!selectedRole) {
+                return await interaction.reply({ content: '❌ Please select a valid role!', ephemeral: true });
+            }
+
+            const configPath = path.resolve('./config.json');
+            let config = {};
+            
+            if (fs.existsSync(configPath)) {
+                try {
+                    const data = fs.readFileSync(configPath, 'utf8');
+                    config = JSON.parse(data);
+                } catch (err) {
+                    config = {};
+                }
+            }
+
+            if (!config[guildId]) {
+                config[guildId] = {};
+            }
+
+            // Role ki ID aur Name dono save kar rahe hain taaki koi error na aaye
+            config[guildId].questRoleId = selectedRole.id;
+            config[guildId].questRoleName = selectedRole.name;
+
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+            const embed = new EmbedBuilder()
+                .setColor('#10b981')
+                .setTitle('Quest Role Updated')
+                .setDescription(`✅ Successfully set the quest access role to **${selectedRole.name}**!\n🆔 ID: \`${selectedRole.id}\``)
+                .setTimestamp();
+
+            await interaction.reply({ embeds: [embed], ephemeral: true });
+        } catch (error) {
+            console.error(error);
+            await interaction.reply({ content: '❌ Kuch gadbad ho gayi, kripya dubara try karein.', ephemeral: true });
         }
-
-        if (!config[guildId]) config[guildId] = {};
-        config[guildId].questRoleId = selectedRole.id;
-
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
-        const embed = new EmbedBuilder()
-            .setColor('#10b981')
-            .setTitle('Quest Role Updated')
-            .setDescription(`✅ Successfully set the quest access role to **${selectedRole.name}**!`)
-            .setTimestamp();
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
     }
 };
-
