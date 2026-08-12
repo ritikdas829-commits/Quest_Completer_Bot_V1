@@ -73,7 +73,7 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     const c = new ContainerBuilder().setAccentColor(0xED4245);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ❌ Access Denied\nYou need the required **Quest Access** role to use quest commands.\n\n📊 **Progress:** \`${progressText}\`\nComplete **2 invites** in the server to get this role automatically!`
+            `# ❌ Access Denied\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\nComplete 2 valid invites first before you can use any commands.`
         ),
     );
 
@@ -778,7 +778,7 @@ export async function handleLinkModal(interaction, client) {
     const c = new ContainerBuilder().setAccentColor(0x57F287);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ✅ Token Linked!\nLinked as **"${accountName}"**.\n\nYou can now use \`/quest\`, \`/q\`, and \`${PREFIX}questlist\`.\nTo remove it, use \`/unlink\`.`,
+            `# ✅ Token Linked!\nLinked as **"${accountName}"**.\n\nYou can now use \`/quest\`, \`${PREFIX}q\`, and \`${PREFIX}questlist\`.\nTo remove it, use \`/unlink\`.`,
         ),
     );
     await interaction.editReply({ components: [c], flags: MessageFlags.IsComponentsV2 });
@@ -841,3 +841,4 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         }
     }
 }
+
