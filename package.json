@@ -1,5 +1,5 @@
 {
-  "name": "quest-completer-v1",
+  "name": "quest-completer",
   "version": "1.0.0",
   "main": "src/index.js",
   "type": "module",
