@@ -12,7 +12,7 @@ const QuestTaskConfigType = {
 export class QuestManager {
     #quests = new Map();
     client;
-    static activeSessionMessage = null; // Saari quests ke liye ek hi live message track karega
+    static activeSessionMessage = null;
 
     constructor(client, quests = []) {
         this.client = client;
@@ -57,7 +57,7 @@ export class QuestManager {
                 const existing = this.#quests.get(q.id);
                 if (existing && q.user_status) existing.updateUserStatus(q.user_status);
             }
-        } catch { /* use stale state */ }
+        } catch {}
 
         const claimable = this.getClaimable();
         let claimed = 0;
@@ -65,10 +65,7 @@ export class QuestManager {
             try {
                 await this.client.post(`/quests/${quest.id}/claim-reward`);
                 claimed++;
-                log(`Claimed reward for "${quest.config.messages.quest_name}"`);
-            } catch (err) {
-                log(`Could not claim reward for "${quest.config.messages.quest_name}": ${err.message}`);
-            }
+            } catch (err) {}
         }
         return claimed;
     }
@@ -93,17 +90,17 @@ export class QuestManager {
             const fresh = await this.client.get('/quests/@me');
             const updated = fresh.quests.find((q) => q.id === quest.id);
             if (updated?.user_status) quest.updateUserStatus(updated.user_status);
-        } catch { /* ignore */ }
+        } catch {}
     }
 
-    // Single Box / Embed ko update karne ka function
+    // Yeh function bilkul waisa single box banayega jaisa aapko chahiye
     static async updateSessionBox(channel, questList, currentQuestName, statusType) {
         if (!channel) return;
         try {
             let description = '';
             questList.forEach((q) => {
                 const qName = q.config.messages.quest_name;
-                const reward = q.config.messages.rewards_summary || '200 Orbs';
+                const reward = q.config.messages.rewards_summary || 'Orbs';
                 let status = '⏳ waiting';
 
                 if (q.isCompleted()) {
@@ -132,31 +129,22 @@ export class QuestManager {
         const questName = quest.config.messages.quest_name;
 
         if (!quest.isEnrolledQuest()) {
-            log(`Enrolling in quest "${questName}"...`);
             await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ enrolling...');
             try {
                 await this.acceptQuest(quest.id);
             } catch (err) {
-                log(`Could not enroll in "${questName}": ${err.message}`);
                 await QuestManager.updateSessionBox(channel, allQuests, questName, '❌ failed');
                 return false;
             }
         }
 
         const taskConfig = quest.config.task_config ?? quest.config.task_config_v2;
-        if (!taskConfig) {
-            log(`[FAIL] "${questName}": task_config is missing.`);
-            return false;
-        }
+        if (!taskConfig) return false;
 
         const tasks = taskConfig.tasks ?? {};
         const TASK_TYPES = Object.values(QuestTaskConfigType);
         const taskName = TASK_TYPES.find((x) => tasks[x] != null);
-
-        if (!taskName) {
-            log(`[FAIL] "${questName}": unsupported task type.`);
-            return false;
-        }
+        if (!taskName) return false;
 
         const task = tasks[taskName];
         const secondsNeeded = task.target;
@@ -186,9 +174,7 @@ export class QuestManager {
                         await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
 
                         if (res?.completed_at || res?.user_status?.completed_at) break;
-                    } catch (err) {
-                        log(`Video progress failed: ${err.message}`);
-                    }
+                    } catch (err) {}
                 }
 
                 if (secondsDone >= secondsNeeded) break;
@@ -206,10 +192,7 @@ export class QuestManager {
             let beats = 0, consecutiveErrors = 0;
 
             while (!quest.isCompleted()) {
-                if (Date.now() - startTime > maxDurationMs) {
-                    log(`Quest "${questName}" timed out.`);
-                    break;
-                }
+                if (Date.now() - startTime > maxDurationMs) break;
 
                 try {
                     const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
@@ -226,7 +209,6 @@ export class QuestManager {
                 if (beats % 5 === 0) await this.#refreshQuestStatus(quest);
 
                 const done = readProgress(quest, eventName, taskName);
-                
                 await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
 
                 if (done >= secondsNeeded || quest.isCompleted()) break;
@@ -239,16 +221,15 @@ export class QuestManager {
             } catch {}
         }
 
-        // Quest Complete hone par status update karein
-        log(`Quest "${questName}" completed!`);
+        // Quest Complete hone par status update
         await QuestManager.updateSessionBox(channel, allQuests, questName, '✓ done');
 
-        // User ko personal DM bhejne ke liye
+        // User DM notification
         if (userId) {
             try {
                 const user = await this.client.users.fetch(userId);
                 if (user) {
-                    await user.send(`✅ Aapki quest **"${questName}"** successfully complete ho gayi hai! 🎉`);
+                    await user.send(`✅ Your quest **"${questName}"** has been successfully completed! 🎉`);
                 }
             } catch (dmErr) {}
         }
