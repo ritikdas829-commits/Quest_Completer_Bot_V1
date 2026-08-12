@@ -1,5 +1,27 @@
+import fs from 'fs';
+import path from 'path';
+
+const dbPath = path.resolve('./invitesData.json');
+
+// Load or initialize invite database
+let inviteData = {};
+try {
+    if (fs.existsSync(dbPath)) {
+        inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    }
+} catch (err) {
+    console.error("Error loading invites database:", err);
+}
+
+function saveDB() {
+    try {
+        fs.writeFileSync(dbPath, JSON.stringify(inviteData, null, 2));
+    } catch (err) {
+        console.error("Error saving invites database:", err);
+    }
+}
+
 const invitesCache = new Map();
-const userInvitesStore = new Map();
 
 export async function cacheGuildInvites(client) {
     client.guilds.cache.forEach(async (guild) => {
@@ -13,7 +35,6 @@ export async function cacheGuildInvites(client) {
 }
 
 export async function handleInviteJoin(member) {
-    // If the joined user is a bot, ignore immediately
     if (member.user.bot) return;
 
     const guild = member.guild;
@@ -25,14 +46,13 @@ export async function handleInviteJoin(member) {
         let usedInvite = null;
 
         for (const [code, invite] of newInvites) {
-            const cachedUses = cachedInvites.get(code) || 0; // Fixed typo here
+            const cachedUses = cachedInvites.get(code) || 0;
             if (invite.uses > cachedUses) {
                 usedInvite = invite;
                 break;
             }
         }
 
-        // Update the cache with latest invite uses
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
         if (usedInvite && usedInvite.inviter) {
@@ -48,16 +68,22 @@ export async function handleInviteJoin(member) {
                 return;
             }
 
-            const currentCount = userInvitesStore.get(inviter.id) || 0;
-            const updatedCount = currentCount + 1;
-            userInvitesStore.set(inviter.id, updatedCount);
+            if (!inviteData[inviter.id]) {
+                inviteData[inviter.id] = { count: 0, invitedUsers: [] };
+            }
 
-            // Automatically find the 'Quest Access' role in the guild
+            // Check if this user was already counted before (Prevents rejoin exploit)
+            if (!inviteData[inviter.id].invitedUsers.includes(member.id)) {
+                inviteData[inviter.id].invitedUsers.push(member.id);
+                inviteData[inviter.id].count += 1;
+                saveDB();
+            }
+
+            const currentCount = inviteData[inviter.id].count;
             const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
 
-            if (updatedCount >= 2 && targetRole) {
+            if (currentCount >= 2 && targetRole) {
                 const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
-                
                 if (inviterMember && !inviterMember.roles.cache.has(targetRole.id)) {
                     await inviterMember.roles.add(targetRole).catch(err => console.error("Role assign error:", err));
                     try {
@@ -71,38 +97,52 @@ export async function handleInviteJoin(member) {
     }
 }
 
+export async function handleInviteLeave(member) {
+    if (member.user.bot) return;
+    const guild = member.guild;
+
+    // Find who invited this member and deduct count if they leave
+    for (const inviterId in inviteData) {
+        const data = inviteData[inviterId];
+        if (data.invitedUsers && data.invitedUsers.includes(member.id)) {
+            // Remove user from invited list and decrease count safely
+            data.invitedUsers = data.invitedUsers.filter(id => id !== member.id);
+            data.count = Math.max(0, data.count - 1);
+            saveDB();
+
+            // Check if count dropped below 2, then remove role automatically
+            const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
+            if (targetRole && data.count < 2) {
+                const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
+                if (inviterMember && inviterMember.roles.cache.has(targetRole.id)) {
+                    await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
+                    try {
+                        await inviterMember.send(`⚠️ One of your invited members left the server. Your invite count dropped below 2, so your Quest Access role has been removed.`);
+                    } catch {}
+                }
+            }
+            break;
+        }
+    }
+}
+
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
-    // Direct bypass for Owner and Administrators
     if (user.id === OWNER_ID || member.permissions.has('Administrator')) {
         return { allowed: true };
     }
 
+    const currentCount = inviteData[user.id]?.count || 0;
     const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
 
-    // Real-time server invite check fallback
-    try {
-        const invites = await member.guild.invites.fetch();
-        let totalUses = 0;
-        
-        invites.forEach(invite => {
-            if (invite.inviter && invite.inviter.id === user.id) {
-                totalUses += invite.uses;
-            }
-        });
-
-        if (totalUses >= 2) {
-            if (targetRole && !member.roles.cache.has(targetRole.id)) {
-                await member.roles.add(targetRole).catch(() => {});
-            }
-            return { allowed: true };
+    if (currentCount >= 2) {
+        if (targetRole && !member.roles.cache.has(targetRole.id)) {
+            await member.roles.add(targetRole).catch(() => {});
         }
-    } catch (err) {
-        console.error("Error checking real invites:", err);
+        return { allowed: true };
     }
 
-    const currentCount = userInvitesStore.get(user.id) || 0;
     const progressText = `${Math.min(currentCount, 2)}/2 invites completed`;
 
     return { 
