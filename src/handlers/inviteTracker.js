@@ -12,7 +12,8 @@ export async function cacheGuildInvites(client) {
     });
 }
 
-export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
+export async function handleInviteJoin(member) {
+    // If the joined user is a bot, ignore immediately
     if (member.user.bot) return;
 
     const guild = member.guild;
@@ -24,32 +25,41 @@ export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
         let usedInvite = null;
 
         for (const [code, invite] of newInvites) {
-            const cachedUses = cachedInvites.get(code) || 0;
+            const cachedUses = cachedUses = cachedInvites.get(code) || 0;
             if (invite.uses > cachedUses) {
                 usedInvite = invite;
                 break;
             }
         }
 
+        // Update the cache with latest invite uses
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
         if (usedInvite && usedInvite.inviter) {
             const inviter = usedInvite.inviter;
 
+            // Prevent self-invites
+            if (inviter.id === member.user.id) return;
+
             // Filter out fake or new accounts (accounts younger than 3 days)
             const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
-            if (accountAgeDays < 3) return;
+            if (accountAgeDays < 3) {
+                console.log(`[Anti-Alt] Ignored fake/new account: ${member.user.tag}`);
+                return;
+            }
 
             const currentCount = userInvitesStore.get(inviter.id) || 0;
             const updatedCount = currentCount + 1;
             userInvitesStore.set(inviter.id, updatedCount);
 
-            if (updatedCount >= 2) {
-                const targetRole = guild.roles.cache.get(REQUIRED_ROLE_ID);
+            // Automatically find the 'Quest Access' role in the guild
+            const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
+
+            if (updatedCount >= 2 && targetRole) {
                 const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
                 
-                if (inviterMember && targetRole && !inviterMember.roles.cache.has(targetRole.id)) {
-                    await inviterMember.roles.add(targetRole);
+                if (inviterMember && !inviterMember.roles.cache.has(targetRole.id)) {
+                    await inviterMember.roles.add(targetRole).catch(err => console.error("Role assign error:", err));
                     try {
                         await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and unlocked access to quest commands.`);
                     } catch {}
@@ -61,7 +71,7 @@ export async function handleInviteJoin(member, REQUIRED_ROLE_ID) {
     }
 }
 
-export async function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
+export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
     // Direct bypass for Owner and Administrators
@@ -69,12 +79,9 @@ export async function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
         return { allowed: true };
     }
 
-    // Check if user has the required role
-    if (member.roles.cache.has(REQUIRED_ROLE_ID)) {
-        return { allowed: true };
-    }
+    const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
 
-    // Real-time fallback: Server ke actual invites check karega agar memory mein count kam ho
+    // Real-time server invite check fallback
     try {
         const invites = await member.guild.invites.fetch();
         let totalUses = 0;
@@ -85,9 +92,7 @@ export async function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
             }
         });
 
-        // Agar aapke invites 2 ya usse zyada hain, toh role automatically de do aur access allow karo
         if (totalUses >= 2) {
-            const targetRole = member.guild.roles.cache.get(REQUIRED_ROLE_ID);
             if (targetRole && !member.roles.cache.has(targetRole.id)) {
                 await member.roles.add(targetRole).catch(() => {});
             }
@@ -102,6 +107,6 @@ export async function checkCommandAccess(user, member, REQUIRED_ROLE_ID) {
 
     return { 
         allowed: false, 
-        message: `❌ You need the **Quest Access** role to use quest commands.\n\n📊 **Progress:** \`${progressText}\`\nComplete **2 invites** in the server to get this role automatically!` 
+        message: `❌ You must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\nComplete 2 valid invites first before you can use any commands.` 
     };
 }
