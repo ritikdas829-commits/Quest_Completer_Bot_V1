@@ -25,7 +25,7 @@ export async function handleInviteJoin(member) {
         let usedInvite = null;
 
         for (const [code, invite] of newInvites) {
-            const cachedUses = cachedUses = cachedInvites.get(code) || 0;
+            const cachedUses = cachedInvites.get(code) || 0; // Fixed typo here
             if (invite.uses > cachedUses) {
                 usedInvite = invite;
                 break;
