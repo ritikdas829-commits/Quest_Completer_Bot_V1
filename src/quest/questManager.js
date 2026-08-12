@@ -1,4 +1,5 @@
 import { Quest } from './quest.js';
+import { EmbedBuilder } from 'discord.js';
 
 const QuestTaskConfigType = {
     WATCH_VIDEO:           'WATCH_VIDEO',
@@ -11,6 +12,7 @@ const QuestTaskConfigType = {
 export class QuestManager {
     #quests = new Map();
     client;
+    liveMessage = null; // Used to track the live progress message
 
     constructor(client, quests = []) {
         this.client = client;
@@ -94,15 +96,36 @@ export class QuestManager {
         } catch { /* ignore */ }
     }
 
-    async doingQuest(quest, log = console.log) {
+    async doingQuest(quest, log = console.log, channel = null, userId = null) {
         const questName = quest.config.messages.quest_name;
+
+        // Function to create or update the live progress message box
+        const updateLiveBox = async (statusText) => {
+            if (!channel) return;
+            try {
+                const embed = new EmbedBuilder()
+                    .setColor('#2b2d31')
+                    .setTitle('♡ quest session in progress')
+                    .setDescription(`**♡ ${questName}**\n└ ${quest.config.messages.rewards_summary || 'Orbs'}\n${statusText}`);
+                
+                if (this.liveMessage) {
+                    await this.liveMessage.edit({ embeds: [embed] }).catch(() => {});
+                } else {
+                    this.liveMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+                }
+            } catch (err) {
+                // Ignore errors if message sending fails
+            }
+        };
 
         if (!quest.isEnrolledQuest()) {
             log(`Enrolling in quest "${questName}"...`);
+            await updateLiveBox('♡ enrolling...');
             try {
                 await this.acceptQuest(quest.id);
             } catch (err) {
                 log(`Could not enroll in "${questName}": ${err.message}`);
+                await updateLiveBox('❌ enrollment failed');
                 return false;
             }
         }
@@ -110,6 +133,7 @@ export class QuestManager {
         const taskConfig = quest.config.task_config ?? quest.config.task_config_v2;
         if (!taskConfig) {
             log(`[FAIL] "${questName}": task_config is missing from Discord's response.`);
+            await updateLiveBox('❌ task config missing');
             return false;
         }
 
@@ -122,6 +146,7 @@ export class QuestManager {
 
         if (!taskName) {
             log(`[FAIL] "${questName}": unsupported task type(s) [${allKeys.join(', ')}].`);
+            await updateLiveBox('❌ unsupported task');
             return false;
         }
 
@@ -152,6 +177,11 @@ export class QuestManager {
                             timestamp: Math.min(secondsNeeded, timestamp + Math.random()),
                         });
                         secondsDone = Math.min(secondsNeeded, timestamp);
+                        
+                        // Update live box with progress percentage
+                        const percent = Math.floor((secondsDone / secondsNeeded) * 100);
+                        await updateLiveBox(`♡ running (${percent}%)`);
+
                         if (res?.completed_at || res?.user_status?.completed_at) break;
                     } catch (err) {
                         log(`Video progress beat failed for "${questName}": ${err.message}. Retrying...`);
@@ -166,8 +196,6 @@ export class QuestManager {
                 await this.client.post(`/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
             } catch { /* best effort */ }
 
-            log(`Quest "${questName}" completed!`);
-
         } else if (taskName === 'PLAY_ON_DESKTOP') {
             const interval = 30;
             const maxDurationMs = (secondsNeeded + 600) * 1000;
@@ -177,10 +205,7 @@ export class QuestManager {
             while (!quest.isCompleted()) {
                 if (Date.now() - startTime > maxDurationMs) {
                     log(`Quest "${questName}" timed out.`);
-                    try {
-                        const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: true });
-                        quest.updateUserStatus(extractStatus(res));
-                    } catch { /* ignore */ }
+                    await updateLiveBox('❌ timed out');
                     return true;
                 }
 
@@ -191,7 +216,11 @@ export class QuestManager {
                 } catch (err) {
                     consecutiveErrors++;
                     log(`Heartbeat failed for "${questName}" (attempt ${consecutiveErrors}): ${err.message}`);
-                    if (consecutiveErrors >= 5) { log(`Too many heartbeat failures for "${questName}". Giving up.`); return false; }
+                    if (consecutiveErrors >= 5) { 
+                        log(`Too many heartbeat failures for "${questName}". Giving up.`); 
+                        await updateLiveBox('❌ failed');
+                        return false; 
+                    }
                     await this.#timeout(5_000);
                     continue;
                 }
@@ -202,6 +231,9 @@ export class QuestManager {
                 const done = readProgress(quest, eventName, taskName);
                 const remaining = Math.max(0, secondsNeeded - done);
                 log(`Spoofed your game to ${applicationName}. About ${Math.ceil(remaining / 60)} more minute(s) to go.`);
+                
+                // Update live box with remaining time
+                await updateLiveBox(`♡ running\n└ About ${Math.ceil(remaining / 60)} min(s) left`);
 
                 if (done >= secondsNeeded || quest.isCompleted()) break;
                 await this.#timeout(interval * 1000);
@@ -212,15 +244,30 @@ export class QuestManager {
                 quest.updateUserStatus(extractStatus(res));
             } catch { /* best effort */ }
 
-            log(`Quest "${questName}" completed!`);
-            return true;
-
         } else if (taskName === 'STREAM_ON_DESKTOP') {
             log(`Stream quests cannot be completed automatically. Use the Discord desktop app for "${questName}".`);
+            await updateLiveBox('❌ stream task not supported');
             return false;
         } else if (taskName === 'PLAY_ACTIVITY') {
             log(`Activity quests are not supported. Use the Discord desktop app for "${questName}".`);
+            await updateLiveBox('❌ activity task not supported');
             return false;
+        }
+
+        // Quest Successfully Completed!
+        log(`Quest "${questName}" completed!`);
+        await updateLiveBox('✓ done');
+
+        // Send a Direct Message (DM) to the user when completed
+        if (userId) {
+            try {
+                const user = await this.client.users.fetch(userId);
+                if (user) {
+                    await user.send(`✅ Your quest **"${questName}"** has been successfully completed! 🎉`);
+                }
+            } catch (dmErr) {
+                log(`Could not send DM to user: ${dmErr.message}`);
+            }
         }
 
         return true;
