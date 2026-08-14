@@ -93,13 +93,12 @@ function buildHelp(user, client) {
             .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
     );
 
-    // ── Button Row (Niche add karne ke liye) ─────────────────────────────────
+    // ── Support Server Button Row ────────────────────────────────────────────
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('support_btn') // Aap yahan apna custom ID ya URL dal sakte hain
-            .setLabel('Support / Invite')
+            .setLabel('Support Server')
             .setStyle(ButtonStyle.Link)
-            .setUrl('https://discord.com') // Yahan apna link ya custom URL daal dein
+            .setUrl('https://discord.gg/eWEApjF7AY')
     );
 
     return { components: [c, row], flags: MessageFlags.IsComponentsV2 };
