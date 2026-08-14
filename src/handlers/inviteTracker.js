@@ -3,7 +3,7 @@ import path from 'path';
 
 const dbPath = path.resolve('./invitesData.json');
 
-// Load or initialize invite database
+// Load or initialize invite database safely
 let inviteData = {};
 try {
     if (fs.existsSync(dbPath)) {
@@ -23,6 +23,7 @@ function saveDB() {
 
 const invitesCache = new Map();
 
+// Cache guild invites when bot starts
 export async function cacheGuildInvites(client) {
     client.guilds.cache.forEach(async (guild) => {
         try {
@@ -34,8 +35,9 @@ export async function cacheGuildInvites(client) {
     });
 }
 
+// Handle member join & track real invites
 export async function handleInviteJoin(member) {
-    if (member.user.bot) return;
+    if (!member || member.user.bot) return;
 
     const guild = member.guild;
     const cachedInvites = invitesCache.get(guild.id);
@@ -53,6 +55,7 @@ export async function handleInviteJoin(member) {
             }
         }
 
+        // Update cache
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
         if (usedInvite && usedInvite.inviter) {
@@ -61,7 +64,7 @@ export async function handleInviteJoin(member) {
             // Prevent self-invites
             if (inviter.id === member.user.id) return;
 
-            // Filter out fake or new accounts (accounts younger than 7 days)
+            // Anti-Alt Filter: Ignore accounts younger than 7 days
             const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
             if (accountAgeDays < 7) {
                 console.log(`[Anti-Alt] Ignored fake/new account: ${member.user.tag}`);
@@ -72,7 +75,7 @@ export async function handleInviteJoin(member) {
                 inviteData[inviter.id] = { count: 0, invitedUsers: [] };
             }
 
-            // Check if this user was already counted before (Prevents rejoin exploit)
+            // Prevent rejoin exploit
             if (!inviteData[inviter.id].invitedUsers.includes(member.id)) {
                 inviteData[inviter.id].invitedUsers.push(member.id);
                 inviteData[inviter.id].count += 1;
@@ -97,20 +100,18 @@ export async function handleInviteJoin(member) {
     }
 }
 
+// Handle member leave & deduct invites + remove role if count drops
 export async function handleInviteLeave(member) {
-    if (member.user.bot) return;
+    if (!member || member.user.bot) return;
     const guild = member.guild;
 
-    // Find who invited this member and deduct count if they leave
     for (const inviterId in inviteData) {
         const data = inviteData[inviterId];
         if (data.invitedUsers && data.invitedUsers.includes(member.id)) {
-            // Remove user from invited list and decrease count safely
             data.invitedUsers = data.invitedUsers.filter(id => id !== member.id);
             data.count = Math.max(0, data.count - 1);
             saveDB();
 
-            // Check if count dropped below 2, then remove role automatically
             const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
             if (targetRole && data.count < 2) {
                 const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
@@ -126,6 +127,7 @@ export async function handleInviteLeave(member) {
     }
 }
 
+// Check command access with accurate database counts
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
@@ -150,4 +152,3 @@ export async function checkCommandAccess(user, member) {
         message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
     };
 }
-
