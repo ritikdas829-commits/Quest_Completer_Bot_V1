@@ -67,7 +67,7 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     const c = new ContainerBuilder().setAccentColor(0xED4245);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ❌ Access Denied\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\``
+            `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**`
         ),
     );
 
@@ -201,8 +201,6 @@ async function runQuestAll(userId, tokenStore, channel, send) {
 }
 
 async function runQuestOne(userId, tokenStore, channel, send) {
-    // For single quest or all, we redirect to the single box approach for consistency if desired, 
-    // or run using standard manager doingQuest with all valid quests.
     return runQuestAll(userId, tokenStore, channel, send);
 }
 
@@ -538,4 +536,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
-
