@@ -146,6 +146,7 @@ export async function checkCommandAccess(user, member) {
     const progressText = `${Math.min(currentCount, 2)}/2 invites completed`;
 
     return { 
-    allowed: false, 
-    message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
-};
+        allowed: false, 
+        message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
+    };
+}
