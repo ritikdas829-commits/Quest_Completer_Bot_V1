@@ -52,6 +52,7 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
         GatewayIntentBits.GuildInvites,
+        GatewayIntentBits.GuildMembers, // <--- Added here
     ],
     partials: [Partials.Message, Partials.Channel],
 });
@@ -89,20 +90,17 @@ client.once('ready', async () => {
 });
 
 client.on('guildMemberAdd', (member) => {
-    if (!global.AUTO_ROLE_ID) return;
-    handleInviteJoin(member, global.AUTO_ROLE_ID);
+    handleInviteJoin(member);
 });
 
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
-    // Single default export
     if (mod.default) {
         const cmd = mod.default;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
     }
-    // Named exports (questCommands.js has multiple)
     for (const [key, cmd] of Object.entries(mod)) {
         if (key === 'default' || key === 'makeTokenStore' || key === 'handleLinkModal' || key === 'handleLinkPromptButton' || key === 'runAutoquestForUser') continue;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
