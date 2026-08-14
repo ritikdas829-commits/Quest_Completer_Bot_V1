@@ -33,18 +33,24 @@ function checkUserAccess(member) {
     if (!member) return true;
     if (member.permissions.has('Administrator')) return true;
 
-    const guildId = member.guild.id;
-    const configPath = path.resolve('./config.json');
-
-    if (fs.existsSync(configPath)) {
+    // Direct invites database check to bypass fake/alt issues and grant access & role
+    const dbPath = path.resolve('./invitesData.json');
+    if (fs.existsSync(dbPath)) {
         try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            const roleId = config[guildId]?.questRoleId;
-            if (roleId) return member.roles.cache.has(roleId);
+            const inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+            const userInvites = inviteData[member.id]?.count || 0;
+            if (userInvites >= 2) {
+                const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
+                if (targetRole && !member.roles.cache.has(targetRole.id)) {
+                    member.roles.add(targetRole).catch(() => {});
+                }
+                return true;
+            }
         } catch (err) {
-            console.error('Config read error:', err);
+            console.error('Database check error:', err);
         }
     }
+
     return member.roles.cache.some(role => role.name === 'Quest Access');
 }
 
@@ -53,15 +59,13 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     const userId = member ? member.id : interactionOrMessage.author.id;
     
     let currentInvites = 0;
-    try {
-        if (member && member.guild) {
-            const invites = await member.guild.invites.fetch().catch(() => null);
-            if (invites) {
-                const userInvites = invites.filter(inv => inv.inviter && inv.inviter.id === userId);
-                currentInvites = userInvites.reduce((acc, inv) => acc + inv.uses, 0);
-            }
-        }
-    } catch {}
+    const dbPath = path.resolve('./invitesData.json');
+    if (fs.existsSync(dbPath)) {
+        try {
+            const inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+            currentInvites = inviteData[userId]?.count || 0;
+        } catch {}
+    }
 
     const progressText = `${Math.min(currentInvites, 2)}/2 invites completed`;
     const c = new ContainerBuilder().setAccentColor(0xED4245);
@@ -162,7 +166,6 @@ function buildErrorCard(err) {
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
 
-// ----------------- Updated Run Quest All (Single Box Implementation) -----------------
 async function runQuestAll(userId, tokenStore, channel, send) {
     const token = tokenStore.get(userId);
     if (!token) { await send(buildLinkPrompt()); return false; }
@@ -173,18 +176,13 @@ async function runQuestAll(userId, tokenStore, channel, send) {
         const valid = manager.filterQuestsValid();
         if (valid.length === 0) { await send(buildNoQuestsCard()); return false; }
 
-        // Reset active session tracker for this new run
         QuestManager.activeSessionMessage = null;
-
-        // Initial render for all quests as waiting
         await QuestManager.updateSessionBox(channel, valid, null, '⏳ waiting');
 
         for (const quest of valid) {
-            const questName = quest.config.messages.quest_name;
             await manager.doingQuest(quest, console.log, channel, userId, valid);
         }
 
-        // Claim rewards after execution
         await manager.claimRewards(console.log).catch(() => 0);
         return true;
 
