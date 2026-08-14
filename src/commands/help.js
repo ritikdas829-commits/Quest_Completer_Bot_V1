@@ -68,16 +68,6 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── Invite System Section ────────────────────────────────────────────────
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `📊 **Invite System**\n` +
-            `\`/invite\`  \`${PREFIX}i\` — Check your invite log and statistics`,
-        ),
-    );
-
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-
     // ── Utility Section ──────────────────────────────────────────────────────
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
