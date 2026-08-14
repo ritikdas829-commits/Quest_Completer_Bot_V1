@@ -1,9 +1,12 @@
 import {
     SlashCommandBuilder,
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
+    ContainerBuilder,
+    TextDisplayBuilder,
+    SeparatorBuilder,
+    SeparatorSpacingSize,
+    SectionBuilder,
+    ThumbnailBuilder,
+    MessageFlags,
 } from 'discord.js';
 import { PREFIX } from '../utils/config.js';
 
@@ -25,38 +28,67 @@ export default {
 function buildHelp(user, client) {
     const avatar = user.displayAvatarURL({ size: 128, extension: 'png' });
     const botAvatar = client.user.displayAvatarURL({ size: 128, extension: 'png' });
+    const c = new ContainerBuilder().setAccentColor(0x5865F2);
 
-    const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle('🤖 Quest Bot')
-        .setDescription(`Hey **${user.username}**, here's everything I can do`)
-        .setThumbnail(botAvatar)
-        .addFields(
-            {
-                name: '🔗 Token',
-                value: `\`/link\`  \`${PREFIX}link\` — Link your Discord user token\n\`/unlink\`  \`${PREFIX}unlink\` — Remove your saved token\n\`/tokencheck\`  \`${PREFIX}tokencheck\` — Check if your token is still valid`,
-                inline: false
-            },
-            {
-                name: '🎮 Quests',
-                value: `\`/quest\`  \`${PREFIX}quest\` — Pick and complete one quest\n\`/q\`  \`${PREFIX}q\` — Complete all quests at once\n\`/questlist\`  \`${PREFIX}questlist\` — View all your quests & status\n\`/autoquest\`  \`${PREFIX}autoquest\` — Auto-complete new quests as they drop`,
-                inline: false
-            },
-            {
-                name: '🛠️ Utility',
-                value: `\`/ping\`  \`${PREFIX}ping\` — Check bot latency\n\`/help\`  \`${PREFIX}help\` — You're already here`,
-                inline: false
-            }
-        )
-        .setFooter({ text: `Serving ${client.guilds.cache.size} server(s)  ·  Prefix: ${PREFIX}`, iconURL: avatar })
-        .setTimestamp();
+    // ── Header ──────────────────────────────────────────────────────────────
+    c.addSectionComponents(
+        new SectionBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(
+                    `# 🤖 Quest Bot\n-# Hey **${user.username}**, here's everything I can do`,
+                ),
+            )
+            .setThumbnailAccessory(new ThumbnailBuilder().setURL(botAvatar)),
+    );
 
-    const button = new ButtonBuilder()
-        .setLabel('Support Server')
-        .setStyle(ButtonStyle.Link)
-        .setUrl('https://discord.gg/eWEApjF7AY');
+    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    const row = new ActionRowBuilder().addComponents(button);
+    // ── Token Section ────────────────────────────────────────────────────────
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `🔗 **Token**\n` +
+            `\`/link\`  \`${PREFIX}link\` — Link your Discord user token\n` +
+            `\`/unlink\`  \`${PREFIX}unlink\` — Remove your saved token\n` +
+            `\`/tokencheck\`  \`${PREFIX}tokencheck\` — Check if your token is still valid`,
+        ),
+    );
 
-    return { embeds: [embed], components: [row] };
+    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+
+    // ── Quest Section ────────────────────────────────────────────────────────
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `🎮 **Quests**\n` +
+            `\`/quest\`  \`${PREFIX}quest\` — Pick and complete one quest\n` +
+            `\`/q\`  \`${PREFIX}q\` — Complete all quests at once\n` +
+            `\`/questlist\`  \`${PREFIX}questlist\` — View all your quests & status\n` +
+            `\`/autoquest\`  \`${PREFIX}autoquest\` — Auto-complete new quests as they drop`,
+        ),
+    );
+
+    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+
+    // ── Utility Section ──────────────────────────────────────────────────────
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `🛠️ **Utility**\n` +
+            `\`/ping\`  \`${PREFIX}ping\` — Check bot latency\n` +
+            `\`/help\`  \`${PREFIX}help\` — You're already here`,
+        ),
+    );
+
+    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+
+    // ── Footer ───────────────────────────────────────────────────────────────
+    c.addSectionComponents(
+        new SectionBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(
+                    `-# 🌐 Serving **${client.guilds.cache.size}** server(s)  ·  Prefix: \`${PREFIX}\``,
+                ),
+            )
+            .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
+    );
+
+    return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
