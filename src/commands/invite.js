@@ -10,7 +10,6 @@ export default {
                 .setRequired(false)
         ),
     
-    // Change this line from an array to a single string to match standard command handlers
     prefix: 'i',
 
     async prefixExecute(message, args, client) {
@@ -31,14 +30,19 @@ export default {
 async function sendInviteEmbed(context, targetUser) {
     try {
         const guild = context.guild;
-        const invites = await guild.invites.fetch();
+        
+        // Fetch invites safely with permissions check
         let totalUses = 0;
-
-        invites.forEach(invite => {
-            if (invite.inviter && invite.inviter.id === targetUser.id) {
-                totalUses += invite.uses;
-            }
-        });
+        try {
+            const invites = await guild.invites.fetch();
+            invites.forEach(invite => {
+                if (invite.inviter && invite.inviter.id === targetUser.id) {
+                    totalUses += invite.uses;
+                }
+            });
+        } catch (e) {
+            console.log("Could not fetch invites, bot might lack Manage Guild permission.");
+        }
 
         const embed = new EmbedBuilder()
             .setColor('#10b981')
@@ -52,18 +56,27 @@ async function sendInviteEmbed(context, targetUser) {
             )
             .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }));
 
-        if (context.reply) {
-            await context.reply({ embeds: [embed] });
+        // Send response safely handling both interactions and prefix messages
+        if (context.isCommand && context.isCommand()) {
+            if (context.replied || context.deferred) {
+                await context.editReply({ embeds: [embed] });
+            } else {
+                await context.reply({ embeds: [embed] });
+            }
         } else {
             await context.reply({ embeds: [embed] });
         }
     } catch (err) {
         console.error("Error generating invite embed:", err);
         const errorMsg = '❌ Could not fetch invite statistics.';
-        if (context.reply) {
-            await context.reply({ content: errorMsg, ephemeral: true });
-        } else {
-            await context.reply(errorMsg);
+        try {
+            if (context.replied || context.deferred) {
+                await context.editReply({ content: errorMsg });
+            } else {
+                await context.reply({ content: errorMsg });
+            }
+        } catch (e) {
+            // Fallback if message reply fails
         }
     }
 }
