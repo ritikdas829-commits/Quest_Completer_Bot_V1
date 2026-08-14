@@ -6,6 +6,9 @@ import {
     SeparatorSpacingSize,
     SectionBuilder,
     ThumbnailBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
     MessageFlags,
 } from 'discord.js';
 import { PREFIX } from '../utils/config.js';
@@ -90,5 +93,14 @@ function buildHelp(user, client) {
             .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
     );
 
-    return { components: [c], flags: MessageFlags.IsComponentsV2 };
+    // ── Button Row (Niche add karne ke liye) ─────────────────────────────────
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('support_btn') // Aap yahan apna custom ID ya URL dal sakte hain
+            .setLabel('Support / Invite')
+            .setStyle(ButtonStyle.Link)
+            .setUrl('https://discord.com') // Yahan apna link ya custom URL daal dein
+    );
+
+    return { components: [c, row], flags: MessageFlags.IsComponentsV2 };
 }
