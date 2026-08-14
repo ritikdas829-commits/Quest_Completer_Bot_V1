@@ -61,9 +61,9 @@ export async function handleInviteJoin(member) {
             // Prevent self-invites
             if (inviter.id === member.user.id) return;
 
-            // Filter out fake or new accounts (accounts younger than 3 days)
+            // Filter out fake or new accounts (accounts younger than 7 days)
             const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
-            if (accountAgeDays < 3) {
+            if (accountAgeDays < 7) {
                 console.log(`[Anti-Alt] Ignored fake/new account: ${member.user.tag}`);
                 return;
             }
@@ -150,3 +150,4 @@ export async function checkCommandAccess(user, member) {
         message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
     };
 }
+
