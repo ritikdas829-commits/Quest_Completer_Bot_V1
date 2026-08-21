@@ -179,9 +179,10 @@ async function runQuestAll(userId, tokenStore, channel, send) {
         QuestManager.activeSessionMessage = null;
         await QuestManager.updateSessionBox(channel, valid, null, '⏳ waiting');
 
-        for (const quest of valid) {
-            await manager.doingQuest(quest, console.log, channel, userId, valid);
-        }
+        // Yahan loop ko update karke Promise.all kar diya gaya hai taaki quests parallel run ho sakein
+        await Promise.all(
+            valid.map((quest) => manager.doingQuest(quest, console.log, channel, userId, valid))
+        );
 
         await manager.claimRewards(console.log).catch(() => 0);
         return true;
@@ -534,3 +535,4 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
+
