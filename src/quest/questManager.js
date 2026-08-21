@@ -13,6 +13,7 @@ export class QuestManager {
     #quests = new Map();
     client;
     static activeSessionMessage = null;
+    static #updateLock = Promise.resolve();
 
     constructor(client, quests = []) {
         this.client = client;
@@ -93,36 +94,41 @@ export class QuestManager {
         } catch {}
     }
 
-    // Yeh function bilkul waisa single box banayega jaisa aapko chahiye
+    // Safe session box updater with lock to prevent race conditions during parallel execution
     static async updateSessionBox(channel, questList, currentQuestName, statusType) {
         if (!channel) return;
-        try {
-            let description = '';
-            questList.forEach((q) => {
-                const qName = q.config.messages.quest_name;
-                const reward = q.config.messages.rewards_summary || 'Orbs';
-                let status = '⏳ waiting';
+        
+        QuestManager.#updateLock = QuestManager.#updateLock.then(async () => {
+            try {
+                let description = '';
+                questList.forEach((q) => {
+                    const qName = q.config.messages.quest_name;
+                    const reward = q.config.messages.rewards_summary || 'Orbs';
+                    let status = '⏳ waiting';
 
-                if (q.isCompleted()) {
-                    status = '✓ done';
-                } else if (qName === currentQuestName) {
-                    status = statusType;
+                    if (q.isCompleted()) {
+                        status = '✓ done';
+                    } else if (qName === currentQuestName) {
+                        status = statusType;
+                    }
+
+                    description += `**♡ ${qName}**\n└ ${reward}\n> ${status}\n\n`;
+                });
+
+                const embed = new EmbedBuilder()
+                    .setColor('#2b2d31')
+                    .setTitle('♡ quest session in progress')
+                    .setDescription(description.trim());
+
+                if (QuestManager.activeSessionMessage) {
+                    await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
+                } else {
+                    QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
                 }
+            } catch (err) {}
+        });
 
-                description += `**♡ ${qName}**\n└ ${reward}\n> ${status}\n\n`;
-            });
-
-            const embed = new EmbedBuilder()
-                .setColor('#2b2d31')
-                .setTitle('♡ quest session in progress')
-                .setDescription(description.trim());
-
-            if (QuestManager.activeSessionMessage) {
-                await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
-            } else {
-                QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
-            }
-        } catch (err) {}
+        await QuestManager.#updateLock;
     }
 
     async doingQuest(quest, log = console.log, channel = null, userId = null, allQuests = []) {
@@ -252,3 +258,4 @@ function readProgress(quest, eventName, taskName) {
     const byTask  = progress[taskName]?.value;
     return Number(byEvent ?? byTask ?? 0) || 0;
 }
+
