@@ -102,10 +102,13 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Prefix Command Message Handler (.queststatus, etc.)
+// Prefix Command Message Handler (.queststatus, etc.) - Single Message Protection Added
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     
+    // Check taaki message do baar process na ho
+    if (message.commandProcessed) return;
+
     const prefix = '.'; 
     if (!message.content.startsWith(prefix)) return;
 
@@ -114,6 +117,9 @@ client.on('messageCreate', async (message) => {
 
     const command = client.prefixCommands.get(commandName);
     if (!command) return;
+
+    // Mark message as processed
+    message.commandProcessed = true;
 
     try {
         if (command.prefixExecute) {
