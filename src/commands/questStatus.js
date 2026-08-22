@@ -29,9 +29,9 @@ export default {
                 .setLabel('🔄 Refresh Status')
                 .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
+                .setCustomId('create_ticket')
                 .setLabel('🎫 Open Ticket')
-                .setStyle(ButtonStyle.Link)
-                .setURL('https://discord.com') // Yahan URL capital hona chahiye
+                .setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
@@ -58,9 +58,9 @@ export default {
                 .setLabel('🔄 Refresh Status')
                 .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
+                .setCustomId('create_ticket')
                 .setLabel('🎫 Open Ticket')
-                .setStyle(ButtonStyle.Link)
-                .setURL('https://discord.com') // Yahan bhi URL capital hona chahiye
+                .setStyle(ButtonStyle.Secondary)
         );
 
         await message.reply({ embeds: [embed], components: [row] });
