@@ -1,12 +1,12 @@
 import 'dotenv/config';
-import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials, EmbedBuilder, ActivityType } from 'discord.js';
 import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
 import { makeTokenStore } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
-import { cacheGuildInvites, handleInviteJoin, handleInviteLeave } from './handlers/inviteTracker.js';
+import { cacheGuildInvites, handleInviteJoin, handleInviteLeave, checkCommandAccess } from './handlers/inviteTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -28,7 +28,7 @@ function banner() {
         `${col.white}${col.bright}   ╚══▀▀═╝  ╚═════╝  ╚═══╝   ╚═╝${col.reset}`,
         '',
         `${col.dim}  ─────────────────────────────────────────────────${col.reset}`,
-        `  ${col.green}●${col.reset} ${col.white}Quest Completer V1${col.reset}  ${col.dim}|${col.reset}   ${col.white}dsc.gg/synoraxdev${col.reset}`,
+        `  ${col.green}●${col.reset} ${col.white}Quest Completer V3${col.reset}  ${col.dim}|${col.reset}   ${col.white}dsc.gg/synoraxdev${col.reset}`,
         `${col.dim}  ─────────────────────────────────────────────────${col.reset}`,
         '',
     ];
@@ -67,6 +67,9 @@ global.AUTO_ROLE_ID = null;
 // Bot start hote hi invites cache karna aur auto-role check/create karna
 client.once('ready', async () => {
     await cacheGuildInvites(client);
+
+    // Bot Activity Status update (V3)
+    client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
     
     // Har server mein check karega aur role bana lega agar nahi hai
     client.guilds.cache.forEach(async (guild) => {
@@ -97,6 +100,26 @@ client.on('guildMemberAdd', (member) => {
 // Member Leave Event (Added to fix rejoin exploit)
 client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
+});
+
+// Button Interaction Handler (Refresh Status button ke liye V3 feature)
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'refresh_status') {
+        const access = await checkCommandAccess(interaction.user, interaction.member);
+        
+        const updatedEmbed = new EmbedBuilder()
+            .setColor(access.allowed ? '#00FFCC' : '#FF3366')
+            .setTitle('🛡️ Quest Status & Invite Verification (V3)')
+            .setDescription(access.allowed 
+                ? `🎉 **Access Granted!** Status refreshed successfully.` 
+                : access.message)
+            .setTimestamp()
+            .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+
+        await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
+    }
 });
 
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
