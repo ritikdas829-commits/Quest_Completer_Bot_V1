@@ -31,7 +31,7 @@ export default {
             new ButtonBuilder()
                 .setLabel('🎫 Open Ticket')
                 .setStyle(ButtonStyle.Link)
-                .setUrl('https://discord.com')
+                .setURL('https://discord.com') // Yahan URL capital hona chahiye
         );
 
         await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
@@ -60,7 +60,7 @@ export default {
             new ButtonBuilder()
                 .setLabel('🎫 Open Ticket')
                 .setStyle(ButtonStyle.Link)
-                .setUrl('https://discord.com')
+                .setURL('https://discord.com') // Yahan bhi URL capital hona chahiye
         );
 
         await message.reply({ embeds: [embed], components: [row] });
