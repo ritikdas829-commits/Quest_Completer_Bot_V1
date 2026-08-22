@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
 import { makeTokenStore } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
-import { cacheGuildInvites, handleInviteJoin } from './handlers/inviteTracker.js';
+import { cacheGuildInvites, handleInviteJoin, handleInviteLeave } from './handlers/inviteTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -52,7 +52,7 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
         GatewayIntentBits.GuildInvites,
-        GatewayIntentBits.GuildMembers, // <--- Added here
+        GatewayIntentBits.GuildMembers,
     ],
     partials: [Partials.Message, Partials.Channel],
 });
@@ -89,8 +89,14 @@ client.once('ready', async () => {
     console.log('Invite tracker and Auto-Role system successfully initialized!');
 });
 
+// Member Join Event
 client.on('guildMemberAdd', (member) => {
     handleInviteJoin(member);
+});
+
+// Member Leave Event (Added to fix rejoin exploit)
+client.on('guildMemberRemove', (member) => {
+    handleInviteLeave(member);
 });
 
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
