@@ -2,18 +2,25 @@ import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, But
 import { checkCommandAccess } from '../handlers/inviteTracker.js';
 
 export default {
+    // Slash Command ke liye
     data: new SlashCommandBuilder()
         .setName('queststatus')
         .setDescription('Check your invite progress and quest command access with interactive buttons!'),
 
-    async execute(interaction) {
-        const user = interaction.user;
-        const member = interaction.member;
+    // Prefix Command (.queststatus) ke liye
+    prefix: 'queststatus',
 
-        // Check access function call karenge
+    async execute(interactionOrMessage) {
+        // Yeh check karega ki user ne Slash command use kiya hai ya Prefix message (.queststatus)
+        const isMessage = !interactionOrMessage.isCommand || !interactionOrMessage.isCommand();
+        
+        const user = isMessage ? interactionOrMessage.author : interactionOrMessage.user;
+        const member = interactionOrMessage.member;
+
+        // User ka invite data check karega
         const access = await checkCommandAccess(user, member);
 
-        // Ek sundar V3 Embed design
+        // V3 Status Embed
         const embed = new EmbedBuilder()
             .setColor(access.allowed ? '#00FFCC' : '#FF3366')
             .setTitle('🛡️ Quest Status & Invite Verification (V3)')
@@ -21,9 +28,9 @@ export default {
                 ? `🎉 **Access Granted!** You have completed your requirements and unlocked all quest commands.` 
                 : access.message)
             .setTimestamp()
-            .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+            .setFooter({ text: 'Quest Completer V3 System', iconURL: interactionOrMessage.client.user.displayAvatarURL() });
 
-        // Interactive Buttons add karenge
+        // Interactive Buttons
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('refresh_status')
@@ -32,10 +39,14 @@ export default {
             new ButtonBuilder()
                 .setLabel('🎫 Open Ticket')
                 .setStyle(ButtonStyle.Link)
-                .setUrl('https://discord.com') // Yahan aap apna ticket channel ya support link daal sakte hain
+                .setUrl('https://discord.com') // Apne server ka ticket link yahan daalein
         );
 
-        await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        // Message ka reply dena (Prefix ke liye normal, Slash ke liye ephemeral)
+        if (isMessage) {
+            await interactionOrMessage.reply({ embeds: [embed], components: [row] });
+        } else {
+            await interactionOrMessage.reply({ embeds: [embed], components: [row], ephemeral: true });
+        }
     }
 };
-
