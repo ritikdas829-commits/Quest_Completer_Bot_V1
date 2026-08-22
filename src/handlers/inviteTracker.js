@@ -75,7 +75,7 @@ export async function handleInviteJoin(member) {
                 inviteData[inviter.id] = { count: 0, invitedUsers: [] };
             }
 
-            // Prevent rejoin exploit (agar user pehle bhi invite ho chuka hai toh dobara count nahi badhega)
+            // Prevent rejoin exploit
             if (!inviteData[inviter.id].invitedUsers.includes(member.id)) {
                 inviteData[inviter.id].invitedUsers.push(member.id);
                 inviteData[inviter.id].count += 1;
@@ -100,12 +100,11 @@ export async function handleInviteJoin(member) {
     }
 }
 
-// Handle member leave & deduct invites + remove role if count drops
+// Handle member leave securely (Won't remove role if total count is still 2 or more)
 export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
 
-    // Har guild ke naye invites ko fetch karke cache update karo taaki leave par bhi uses match rahein
     try {
         const newInvites = await guild.invites.fetch();
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
@@ -113,31 +112,37 @@ export async function handleInviteLeave(member) {
         console.error(`Failed to update invites cache on leave for guild ${guild.name}:`, err);
     }
 
-    // Check karo ki yeh member kis inviter ki list mein tha
     for (const inviterId in inviteData) {
         const data = inviteData[inviterId];
-        if (data.invitedUsers && data.invitedUsers.includes(member.id)) {
-            // Sirf usi inviter ka count kam karo jisne isse invite kiya tha
-            data.invitedUsers = data.invitedUsers.filter(id => id !== member.id);
-            data.count = Math.max(0, data.count - 1);
-            saveDB();
+        
+        if (data && Array.isArray(data.invitedUsers)) {
+            const index = data.invitedUsers.indexOf(member.id);
+            if (index !== -1) {
+                data.invitedUsers.splice(index, 1);
+                data.count = Math.max(0, (data.count || 1) - 1);
+                saveDB();
 
-            const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
-            if (targetRole && data.count < 2) {
-                const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
-                if (inviterMember && inviterMember.roles.cache.has(targetRole.id)) {
-                    await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
-                    try {
-                        await inviterMember.send(`⚠️ One of your invited members left the server. Your invite count dropped below 2, so your Quest Access role has been removed.`);
-                    } catch {}
+                const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
+                if (targetRole) {
+                    const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
+                    
+                    // STRICT CHECK: Role tabhi hatega jab count sach mein 2 se kam ho chuka ho (< 2)
+                    if (inviterMember && data.count < 2) {
+                        if (inviterMember.roles.cache.has(targetRole.id)) {
+                            await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
+                            try {
+                                await inviterMember.send(`⚠️ One of your invited members left the server. Your invite count dropped below 2, so your Quest Access role has been removed.`);
+                            } catch {}
+                        }
+                    }
                 }
+                break;
             }
-            break; // Sahi inviter milne ke baad loop break kar do taaki baaki users affect na ho
         }
     }
 }
 
-// Check command access with accurate database counts
+// Check command access with role safety check
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
@@ -162,4 +167,3 @@ export async function checkCommandAccess(user, member) {
         message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
     };
 }
-
