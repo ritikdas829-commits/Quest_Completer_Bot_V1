@@ -20,16 +20,18 @@ export default {
             return;
         }
 
-        // ==========================================
-        // [PLACEHOLDER] Yahan aap apna video link ya message daal sakte hain
-        // ==========================================
+        // Button: platform_pc (How to use bot / Tutorial Video Link)
         if (interaction.isButton() && interaction.customId === 'platform_pc') {
             await interaction.reply({
-                content: `🎥 **Tutorial Video:**\nhttps://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4`,
+                content: `🎥 **How to use bot:**\nWatch the video tutorial here: https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4`,
                 flags: MessageFlags.Ephemeral
             });
             return;
         }
+
+        // ==========================================
+        // [yeh copy kar ke video ka tutorial dekhe]
+        // ==========================================
 
         // 1. Refresh Status Button Handler
         if (interaction.isButton() && interaction.customId === 'refresh_status') {
@@ -62,7 +64,7 @@ export default {
             return;
         }
 
-        // 2. Open Ticket Button Handler (Creates a private channel)
+        // 2. Open Ticket Button Handler (Creates a private channel with Close button)
         if (interaction.isButton() && interaction.customId === 'create_ticket') {
             const guild = interaction.guild;
             const member = interaction.member;
@@ -94,7 +96,18 @@ export default {
                     flags: MessageFlags.Ephemeral 
                 });
 
-                await ticketChannel.send(`Hello ${member}, welcome to your support ticket! Describe your issue here and staff will help you soon.`);
+                // Close ticket button row
+                const closeRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('close_ticket')
+                        .setLabel('🔒 Close Ticket')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+                await ticketChannel.send({
+                    content: `Hello ${member}, welcome to your support ticket! Describe your issue here and staff will help you soon.`,
+                    components: [closeRow]
+                });
 
             } catch (err) {
                 console.error("Ticket creation error:", err);
@@ -103,6 +116,25 @@ export default {
                     flags: MessageFlags.Ephemeral 
                 });
             }
+            return;
+        }
+
+        // 3. Close Ticket Button Handler (Deletes the channel)
+        if (interaction.isButton() && interaction.customId === 'close_ticket') {
+            const channel = interaction.channel;
+            
+            await interaction.reply({ 
+                content: `🔒 Closing this ticket in 3 seconds...`, 
+                flags: MessageFlags.Ephemeral 
+            });
+            
+            setTimeout(async () => {
+                try {
+                    await channel.delete();
+                } catch (err) {
+                    console.error("Failed to delete channel:", err);
+                }
+            }, 3000);
             return;
         }
 
