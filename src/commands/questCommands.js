@@ -9,13 +9,10 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    StringSelectMenuBuilder,
-    ComponentType,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
     MessageFlags,
-    EmbedBuilder,
 } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
@@ -33,7 +30,6 @@ function checkUserAccess(member) {
     if (!member) return true;
     if (member.permissions.has('Administrator')) return true;
 
-    // Direct invites database check to bypass fake/alt issues and grant/remove access & role
     const dbPath = path.resolve('./invitesData.json');
     if (fs.existsSync(dbPath)) {
         try {
@@ -47,7 +43,6 @@ function checkUserAccess(member) {
                 }
                 return true;
             } else {
-                // Agar invites 2 se kam hain aur role paas hai, toh role remove kar do
                 if (targetRole && member.roles.cache.has(targetRole.id)) {
                     member.roles.remove(targetRole).catch(() => {});
                 }
@@ -82,12 +77,22 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     );
 
     const payload = { components: [c], flags: MessageFlags.IsComponentsV2 | (isEphemeral ? MessageFlags.Ephemeral : 0) };
-    if (interactionOrMessage.reply && typeof interactionOrMessage.reply === 'function' && !interactionOrMessage.deferred) {
-        await interactionOrMessage.reply(payload);
-    } else if (interactionOrMessage.followUp) {
-        await interactionOrMessage.followUp(payload);
-    } else {
-        await interactionOrMessage.channel.send(payload);
+    try {
+        if (interactionOrMessage.reply && typeof interactionOrMessage.reply === 'function') {
+            if (!interactionOrMessage.deferred && !interactionOrMessage.replied) {
+                await interactionOrMessage.reply(payload);
+                return;
+            }
+        }
+        if (interactionOrMessage.followUp && typeof interactionOrMessage.followUp === 'function') {
+            await interactionOrMessage.followUp(payload);
+            return;
+        }
+        if (interactionOrMessage.channel && typeof interactionOrMessage.channel.send === 'function') {
+            await interactionOrMessage.channel.send(payload);
+        }
+    } catch (err) {
+        console.error('Failed to send access denied message:', err);
     }
 }
 
@@ -540,4 +545,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
-
