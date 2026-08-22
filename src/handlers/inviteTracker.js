@@ -55,7 +55,7 @@ export async function handleInviteJoin(member) {
             }
         }
 
-        // Update cache
+        // Update cache immediately with new uses
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
         if (usedInvite && usedInvite.inviter) {
@@ -75,7 +75,7 @@ export async function handleInviteJoin(member) {
                 inviteData[inviter.id] = { count: 0, invitedUsers: [] };
             }
 
-            // Prevent rejoin exploit
+            // Prevent rejoin exploit (agar user pehle bhi invite ho chuka hai toh dobara count nahi badhega)
             if (!inviteData[inviter.id].invitedUsers.includes(member.id)) {
                 inviteData[inviter.id].invitedUsers.push(member.id);
                 inviteData[inviter.id].count += 1;
@@ -105,9 +105,19 @@ export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
 
+    // Har guild ke naye invites ko fetch karke cache update karo taaki leave par bhi uses match rahein
+    try {
+        const newInvites = await guild.invites.fetch();
+        invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
+    } catch (err) {
+        console.error(`Failed to update invites cache on leave for guild ${guild.name}:`, err);
+    }
+
+    // Check karo ki yeh member kis inviter ki list mein tha
     for (const inviterId in inviteData) {
         const data = inviteData[inviterId];
         if (data.invitedUsers && data.invitedUsers.includes(member.id)) {
+            // Sirf usi inviter ka count kam karo jisne isse invite kiya tha
             data.invitedUsers = data.invitedUsers.filter(id => id !== member.id);
             data.count = Math.max(0, data.count - 1);
             saveDB();
@@ -122,7 +132,7 @@ export async function handleInviteLeave(member) {
                     } catch {}
                 }
             }
-            break;
+            break; // Sahi inviter milne ke baad loop break kar do taaki baaki users affect na ho
         }
     }
 }
@@ -152,3 +162,4 @@ export async function checkCommandAccess(user, member) {
         message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
     };
 }
+
