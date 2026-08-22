@@ -33,18 +33,24 @@ function checkUserAccess(member) {
     if (!member) return true;
     if (member.permissions.has('Administrator')) return true;
 
-    // Direct invites database check to bypass fake/alt issues and grant access & role
+    // Direct invites database check to bypass fake/alt issues and grant/remove access & role
     const dbPath = path.resolve('./invitesData.json');
     if (fs.existsSync(dbPath)) {
         try {
             const inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
             const userInvites = inviteData[member.id]?.count || 0;
+            const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
+
             if (userInvites >= 2) {
-                const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
                 if (targetRole && !member.roles.cache.has(targetRole.id)) {
                     member.roles.add(targetRole).catch(() => {});
                 }
                 return true;
+            } else {
+                // Agar invites 2 se kam hain aur role paas hai, toh role remove kar do
+                if (targetRole && member.roles.cache.has(targetRole.id)) {
+                    member.roles.remove(targetRole).catch(() => {});
+                }
             }
         } catch (err) {
             console.error('Database check error:', err);
@@ -179,7 +185,6 @@ async function runQuestAll(userId, tokenStore, channel, send) {
         QuestManager.activeSessionMessage = null;
         await QuestManager.updateSessionBox(channel, valid, null, '⏳ waiting');
 
-        // Yahan loop ko update karke Promise.all kar diya gaya hai taaki quests parallel run ho sakein
         await Promise.all(
             valid.map((quest) => manager.doingQuest(quest, console.log, channel, userId, valid))
         );
