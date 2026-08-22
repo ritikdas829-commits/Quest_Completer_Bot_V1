@@ -102,6 +102,27 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
+// Prefix Command Message Handler (.queststatus, etc.)
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    
+    const prefix = '.'; 
+    if (!message.content.startsWith(prefix)) return;
+
+    const args = message.content.slice(prefix.length).trim().split(/ +/);
+    const commandName = args.shift().toLowerCase();
+
+    const command = client.prefixCommands.get(commandName);
+    if (!command) return;
+
+    try {
+        await command.execute(message, args);
+    } catch (error) {
+        console.error(error);
+        await message.reply('There was an error executing that command!').catch(() => {});
+    }
+});
+
 // Button Interaction Handler (Refresh Status button ke liye V3 feature)
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
