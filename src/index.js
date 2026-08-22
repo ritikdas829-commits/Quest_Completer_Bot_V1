@@ -116,7 +116,11 @@ client.on('messageCreate', async (message) => {
     if (!command) return;
 
     try {
-        await command.execute(message, args);
+        if (command.prefixExecute) {
+            await command.prefixExecute(message, args, client);
+        } else {
+            await command.execute(message, client);
+        }
     } catch (error) {
         console.error(error);
         await message.reply('There was an error executing that command!').catch(() => {});
@@ -170,3 +174,4 @@ for (const file of eventFiles) {
 }
 
 client.login(TOKEN);
+
