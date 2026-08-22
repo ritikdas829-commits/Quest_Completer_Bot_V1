@@ -75,7 +75,7 @@ export async function handleInviteJoin(member) {
                 inviteData[inviter.id] = { count: 0, invitedUsers: [] };
             }
 
-            // Prevent rejoin exploit
+            // Prevent rejoin exploit and track unique users
             if (!inviteData[inviter.id].invitedUsers.includes(member.id)) {
                 inviteData[inviter.id].invitedUsers.push(member.id);
                 inviteData[inviter.id].count += 1;
@@ -85,12 +85,13 @@ export async function handleInviteJoin(member) {
             const currentCount = inviteData[inviter.id].count;
             const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
 
+            // Give access if count reaches 2 or more
             if (currentCount >= 2 && targetRole) {
                 const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
                 if (inviterMember && !inviterMember.roles.cache.has(targetRole.id)) {
                     await inviterMember.roles.add(targetRole).catch(err => console.error("Role assign error:", err));
                     try {
-                        await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and unlocked access to quest commands.`);
+                        await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and your Quest Access has been unlocked.`);
                     } catch {}
                 }
             }
@@ -100,7 +101,7 @@ export async function handleInviteJoin(member) {
     }
 }
 
-// Handle member leave securely (Won't remove role if total count is still 2 or more)
+// Handle member leave (Remove access only if active count drops below 2)
 export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
@@ -126,12 +127,12 @@ export async function handleInviteLeave(member) {
                 if (targetRole) {
                     const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
                     
-                    // STRICT CHECK: Role tabhi hatega jab count sach mein 2 se kam ho chuka ho (< 2)
+                    // Remove role ONLY IF active count drops below 2 (e.g., from 2 to 1)
                     if (inviterMember && data.count < 2) {
                         if (inviterMember.roles.cache.has(targetRole.id)) {
                             await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
                             try {
-                                await inviterMember.send(`⚠️ One of your invited members left the server. Your invite count dropped below 2, so your Quest Access role has been removed.`);
+                                await inviterMember.send(`⚠️ One of your invited members left the server. Your active invite count dropped below 2, so your Quest Access has been locked.`);
                             } catch {}
                         }
                     }
@@ -142,7 +143,7 @@ export async function handleInviteLeave(member) {
     }
 }
 
-// Check command access with role safety check
+// Check command access with clear English instructions
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
@@ -158,12 +159,22 @@ export async function checkCommandAccess(user, member) {
             await member.roles.add(targetRole).catch(() => {});
         }
         return { allowed: true };
+    } else {
+        if (targetRole && member.roles.cache.has(targetRole.id)) {
+            await member.roles.remove(targetRole).catch(() => {});
+        }
     }
 
-    const progressText = `${Math.min(currentCount, 2)}/2 invites completed`;
+    const progressText = `${Math.min(currentCount, 2)}/2`;
 
     return { 
         allowed: false, 
-        message: `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**` 
+        message: `🛡️ **Quest Access Locked!**\n\n` +
+                 `You need to complete **2 valid invites** on the server to use quest commands.\n\n` +
+                 `📊 **Your Progress:** \`${progressText} Invites Completed\`\n\n` +
+                 `💡 **What you need to do:**\n` +
+                 `1. Generate your invite link and invite your friends.\n` +
+                 `2. Once you reach **2 active invites**, your **Access** will be automatically unlocked so you can run commands!` 
     };
 }
+
