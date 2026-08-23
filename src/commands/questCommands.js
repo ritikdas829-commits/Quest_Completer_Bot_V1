@@ -530,7 +530,7 @@ export async function handlePlatformButton(interaction) {
         const pcVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
 
         await interaction.reply({
-            content: `\`\`\`javascript\n${pcScript}\n\`\`\`\n${pcVideo}`,
+            content: `\`\`javascript\n${pcScript}\n\`\`\n${pcVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -556,7 +556,7 @@ export async function handlePlatformButton(interaction) {
         const iosVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/VN20260307_122317.mp4';
 
         await interaction.reply({
-            content: `\`\`\`javascript\n${iosScript}\n\`\`\`\n${iosVideo}`,
+            content: `\`\`javascript\n${iosScript}\n\`\`\n${iosVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
