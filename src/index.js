@@ -4,7 +4,7 @@ import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
-import { makeTokenStore, handlePlatformButton, handleLinkPromptButton } from './commands/questCommands.js';
+import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 import { cacheGuildInvites, handleInviteJoin, handleInviteLeave, checkCommandAccess } from './handlers/inviteTracker.js';
 
@@ -153,9 +153,6 @@ client.on('interactionCreate', async (interaction) => {
     } 
     else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
         await handlePlatformButton(interaction);
-    } 
-    else if (interaction.customId === 'link_prompt') {
-        await handleLinkPromptButton(interaction);
     }
 });
 
