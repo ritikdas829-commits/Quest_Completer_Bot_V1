@@ -140,18 +140,16 @@ function buildLinkPrompt() {
     const c2 = new ContainerBuilder().setAccentColor(0x2b2d31);
     c2.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ✨ Token Copy Guide\nSelect your platform below to view the guide:`,
+            `# ✨ Token Copy Guide\nSelect your platform below to view the script:`,
         ),
     );
-
-    const videoLink = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
     
     c2.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
     c2.addActionRowComponents(
         new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setLabel('PC').setStyle(ButtonStyle.Link).setURL(videoLink),
-            new ButtonBuilder().setLabel('Android').setStyle(ButtonStyle.Link).setURL(videoLink),
-            new ButtonBuilder().setLabel('iOS').setStyle(ButtonStyle.Link).setURL(videoLink),
+            new ButtonBuilder().setCustomId('btn_pc').setLabel('PC').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('btn_android').setLabel('Android').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('btn_ios').setLabel('iOS').setStyle(ButtonStyle.Primary),
         ),
     );
 
@@ -518,6 +516,29 @@ export async function handleLinkModal(interaction, client) {
 
 export async function handleLinkPromptButton(interaction) {
     await interaction.showModal(buildLinkModal());
+}
+
+// Platform Buttons Handler (PC, Android, iOS click handler)
+export async function handlePlatformButton(interaction) {
+    const customId = interaction.customId;
+    if (customId !== 'btn_pc' && customId !== 'btn_android' && customId !== 'btn_ios') return;
+
+    const tokenScript = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s ease-in-out;';document.body.appendChild(n);setTimeout(()=>n.style.opacity='1',50);setTimeout(()=>n.style.opacity='0',3500);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
+
+    const videoLink = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
+
+    const c = new ContainerBuilder().setAccentColor(0x2b2d31);
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `# ✨ Token Copy Script\nLong press or use the copy button to copy the code below:\n\n\`\`\`javascript\n${tokenScript}\n\`\`\``
+        ),
+    );
+
+    await interaction.reply({
+        content: videoLink,
+        components: [c],
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral
+    });
 }
 
 export async function runAutoquestForUser(userId, quest, tokenStore, discordClient) {
