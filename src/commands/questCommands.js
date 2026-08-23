@@ -124,25 +124,42 @@ function buildLinkModal() {
 }
 
 function buildLinkPrompt() {
-    const c = new ContainerBuilder().setAccentColor(0xFEE75C);
-    c.addTextDisplayComponents(
+    // 1. Pehla Box (Token Required - Sirf update Token button ke sath)
+    const c1 = new ContainerBuilder().setAccentColor(0xFEE75C);
+    c1.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `# 🔗 Token Required\nYou need to link your Discord token before using quest commands.\n\n### HOW TO FIND YOUR TOKEN\nPick your platform below:`,
         ),
     );
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-    c.addActionRowComponents(
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('platform_pc').setLabel('Java Script').setStyle(ButtonStyle.Secondary).setEmoji('🪄'),
-        ),
-    );
-    c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
-    c.addActionRowComponents(
+    c1.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+    c1.addActionRowComponents(
         new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('link_prompt').setLabel('🔗 update Token').setStyle(ButtonStyle.Primary),
         ),
     );
-    return { components: [c], flags: MessageFlags.IsComponentsV2 };
+
+    // 2. Dusra Box (Token Copy Script Code Block aur PC/Android/iOS Buttons)
+    const scriptCode = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px;';document.body.appendChild(n);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
+
+    const c2 = new ContainerBuilder().setAccentColor(0x2b2d31);
+    c2.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `# ✨ Token Copy Script\nLong press or use the copy button to copy the code below:\n\n\`\`\`javascript\n${scriptCode}\n\`\`\``,
+        ),
+    );
+
+    const videoLink = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
+    
+    c2.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
+    c2.addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setLabel('PC').setStyle(ButtonStyle.Link).setURL(videoLink),
+            new ButtonBuilder().setLabel('Android').setStyle(ButtonStyle.Link).setURL(videoLink),
+            new ButtonBuilder().setLabel('iOS').setStyle(ButtonStyle.Link).setURL(videoLink),
+        ),
+    );
+
+    return { components: [c1, c2], flags: MessageFlags.IsComponentsV2 };
 }
 
 function buildNoQuestsCard() {
