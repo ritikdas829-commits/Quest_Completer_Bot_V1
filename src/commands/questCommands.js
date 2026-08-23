@@ -543,7 +543,7 @@ export async function handlePlatformButton(interaction) {
         const androidVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/VN20260307_122317.mp4';
 
         await interaction.reply({
-            content: `\`\`\`javascript\n${androidScript}\n\`\`\`\n${androidVideo}`,
+            content: `\`\`javascript\n${androidScript}\n\`\`\n${androidVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
