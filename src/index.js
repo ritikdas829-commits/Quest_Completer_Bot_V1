@@ -4,7 +4,7 @@ import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
-import { makeTokenStore } from './commands/questCommands.js';
+import { makeTokenStore, handlePlatformButton, handleLinkPromptButton } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 import { cacheGuildInvites, handleInviteJoin, handleInviteLeave, checkCommandAccess } from './handlers/inviteTracker.js';
 
@@ -133,7 +133,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Button Interaction Handler (Refresh Status button ke liye V3 feature)
+// Button Interaction Handler
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
@@ -150,6 +150,12 @@ client.on('interactionCreate', async (interaction) => {
             .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
 
         await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
+    } 
+    else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
+        await handlePlatformButton(interaction);
+    } 
+    else if (interaction.customId === 'link_prompt') {
+        await handleLinkPromptButton(interaction);
     }
 });
 
@@ -162,7 +168,7 @@ for (const file of commandFiles) {
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
     }
     for (const [key, cmd] of Object.entries(mod)) {
-        if (key === 'default' || key === 'makeTokenStore' || key === 'handleLinkModal' || key === 'handleLinkPromptButton' || key === 'runAutoquestForUser') continue;
+        if (key === 'default' || key === 'makeTokenStore' || key === 'handleLinkModal' || key === 'handleLinkPromptButton' || key === 'handlePlatformButton' || key === 'runAutoquestForUser') continue;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
     }
@@ -180,4 +186,3 @@ for (const file of eventFiles) {
 }
 
 client.login(TOKEN);
-
