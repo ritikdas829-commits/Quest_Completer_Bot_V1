@@ -518,7 +518,7 @@ export async function handleLinkPromptButton(interaction) {
     await interaction.showModal(buildLinkModal());
 }
 
-// Platform Buttons Handler (PC, Android, iOS click handler)
+// Platform Buttons Handler (PC, Android, iOS click handler with copy-friendly code blocks)
 export async function handlePlatformButton(interaction) {
     const customId = interaction.customId;
     if (customId !== 'btn_pc' && customId !== 'btn_android' && customId !== 'btn_ios') return;
