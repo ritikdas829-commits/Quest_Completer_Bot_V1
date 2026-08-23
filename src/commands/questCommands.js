@@ -42,11 +42,8 @@ function checkUserAccess(member) {
                     member.roles.add(targetRole).catch(() => {});
                 }
                 return true;
-            } else {
-                if (targetRole && member.roles.cache.has(targetRole.id)) {
-                    member.roles.remove(targetRole).catch(() => {});
-                }
             }
+            // Role removal logic yahan se hata di gayi hai taaki bot kisi ka role automatic remove na kare.
         } catch (err) {
             console.error('Database check error:', err);
         }
@@ -601,3 +598,4 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
+
