@@ -124,7 +124,6 @@ function buildLinkModal() {
 }
 
 function buildLinkPrompt() {
-    // 1. Pehla Box (Token Required - Sirf update Token button ke sath)
     const c1 = new ContainerBuilder().setAccentColor(0xFEE75C);
     c1.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
@@ -138,13 +137,10 @@ function buildLinkPrompt() {
         ),
     );
 
-    // 2. Dusra Box (Token Copy Script Code Block aur PC/Android/iOS Buttons)
-    const scriptCode = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px;';document.body.appendChild(n);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
-
     const c2 = new ContainerBuilder().setAccentColor(0x2b2d31);
     c2.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ✨ Token Copy Script\nLong press or use the copy button to copy the code below:\n\n\`\`\`javascript\n${scriptCode}\n\`\`\``,
+            `# ✨ Token Copy Guide\nSelect your platform below to view the guide:`,
         ),
     );
 
