@@ -101,24 +101,40 @@ export class QuestManager {
         QuestManager.#updateLock = QuestManager.#updateLock.then(async () => {
             try {
                 let description = '';
+                let completedCount = 0;
+
+                questList.forEach((q) => {
+                    if (q.isCompleted()) completedCount++;
+                });
+
+                const totalQuests = questList.length;
+
                 questList.forEach((q) => {
                     const qName = q.config.messages.quest_name;
-                    const reward = q.config.messages.rewards_summary || 'Orbs';
-                    let status = '⏳ waiting';
+                    
+                    // Rewards ka naam fetch karne ke liye logic
+                    let rewardText = 'Orbs';
+                    const rewards = q.config.rewards_config?.rewards;
+                    if (rewards && rewards.length > 0) {
+                        rewardText = rewards[0].messages?.name || 'Orbs';
+                    }
 
+                    let status = '♡ waiting';
                     if (q.isCompleted()) {
                         status = '✓ done';
                     } else if (qName === currentQuestName) {
                         status = statusType;
                     }
 
-                    description += `**♡ ${qName}**\n└ ${reward}\n> ${status}\n\n`;
+                    description += `**♡ ${qName}**\n└ ${rewardText}\n> ${status}\n\n`;
                 });
+
+                const headerText = `🤍 in progress · ${completedCount} of ${totalQuests} complete`;
 
                 const embed = new EmbedBuilder()
                     .setColor('#2b2d31')
-                    .setTitle('♡ quest session in progress')
-                    .setDescription(description.trim());
+                    .setTitle('♡ quest session')
+                    .setDescription(`*${headerText}*\n\n${description.trim()}`);
 
                 if (QuestManager.activeSessionMessage) {
                     await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
@@ -258,4 +274,3 @@ function readProgress(quest, eventName, taskName) {
     const byTask  = progress[taskName]?.value;
     return Number(byEvent ?? byTask ?? 0) || 0;
 }
-
