@@ -185,20 +185,21 @@ export class QuestManager {
         ) {
             let secondsDone = readProgress(quest, eventName, taskName);
 
-            while (secondsDone < secondsNeeded) {
+            // Loop chalegi jab tak required seconds tak nahi pahunch jata (jitne min ka video hoga utna time lega)
+            while (secondsDone < secondsNeeded && !quest.isCompleted()) {
                 try {
                     secondsDone = Math.min(secondsNeeded, secondsDone + 15);
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: secondsDone,
                     });
                     
-                    await QuestManager.updateSessionBox(channel, allQuests, questName, 'running');
+                    await QuestManager.updateSessionBox(channel, allQuests, questName, `running (${Math.floor((secondsDone / secondsNeeded) * 100)}%)`);
 
                     if (res?.completed_at || res?.user_status?.completed_at) break;
                 } catch (err) {
                     await this.#timeout(2000);
                 }
-                await this.#timeout(500);
+                await this.#timeout(3000); // Proper natural delay per chunk
             }
 
             try {
