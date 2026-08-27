@@ -49,7 +49,6 @@ export class QuestManager {
         return this.list().filter((q) => q.isCompleted() && !q.hasClaimedRewards());
     }
     filterQuestsValid() {
-        // Removed any hardcoded ID filters so no quest gets skipped
         return this.list().filter(
             (q) => !q.isCompleted() && !q.isExpired(),
         );
@@ -120,22 +119,26 @@ export class QuestManager {
                         rewardText = rewards[0].messages?.name || 'Orbs';
                     }
 
-                    let status = '♡ waiting';
+                    let status = '⏳ Waiting...';
                     if (q.isCompleted()) {
-                        status = '✓ done';
+                        status = '✨ Completed';
                     } else if (qName === currentQuestName) {
-                        status = statusType;
+                        status = `⚡ ${statusType}`;
                     }
 
-                    description += `**♡ ${qName}**\n└ ${rewardText}\n> ${status}\n\n`;
+                    description += `🔹 **${qName}**\n` +
+                                   `┗ 🎁 **Reward:** ${rewardText}\n` +
+                                   `┗ 📌 **Status:** ${status}\n\n`;
                 });
 
-                const headerText = `🤍 in progress · ${completedCount} of ${totalQuests} complete`;
+                const headerText = `🚀 **Live Progress:** \`${completedCount} / ${totalQuests} Completed\``;
 
                 const embed = new EmbedBuilder()
-                    .setColor('#2b2d31')
-                    .setTitle('♡ quest session')
-                    .setDescription(`*${headerText}*\n\n${description.trim()}`);
+                    .setColor('#5865F2')
+                    .setTitle('🎮 Automated Quest Dashboard')
+                    .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
+                    .setFooter({ text: 'Quest Completer V3 • Auto Runner' })
+                    .setTimestamp();
 
                 if (QuestManager.activeSessionMessage) {
                     await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
@@ -152,7 +155,7 @@ export class QuestManager {
         const questName = quest.config.messages.quest_name;
 
         if (!quest.isEnrolledQuest()) {
-            await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ enrolling...');
+            await QuestManager.updateSessionBox(channel, allQuests, questName, 'enrolling...');
             try {
                 await this.acceptQuest(quest.id);
             } catch (err) {
@@ -189,7 +192,7 @@ export class QuestManager {
                         timestamp: secondsDone,
                     });
                     
-                    await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
+                    await QuestManager.updateSessionBox(channel, allQuests, questName, 'running');
 
                     if (res?.completed_at || res?.user_status?.completed_at) break;
                 } catch (err) {
@@ -222,7 +225,7 @@ export class QuestManager {
                 }
 
                 await this.#refreshQuestStatus(quest);
-                await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
+                await QuestManager.updateSessionBox(channel, allQuests, questName, 'running');
 
                 const done = readProgress(quest, eventName, taskName);
                 if (done >= secondsNeeded || quest.isCompleted()) break;
@@ -236,7 +239,7 @@ export class QuestManager {
             } catch {}
         }
 
-        await QuestManager.updateSessionBox(channel, allQuests, questName, '✓ done');
+        await QuestManager.updateSessionBox(channel, allQuests, questName, 'done');
 
         if (userId) {
             try {
