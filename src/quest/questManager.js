@@ -7,6 +7,8 @@ const QuestTaskConfigType = {
     STREAM_ON_DESKTOP:     'STREAM_ON_DESKTOP',
     PLAY_ACTIVITY:         'PLAY_ACTIVITY',
     WATCH_VIDEO_ON_MOBILE: 'WATCH_VIDEO_ON_MOBILE',
+    WATCH_VIDEO_BY_STREAM: 'WATCH_VIDEO_BY_STREAM',
+    LEARN_MORE:            'LEARN_MORE',
 };
 
 export class QuestManager {
@@ -166,10 +168,15 @@ export class QuestManager {
         if (!taskName) return false;
 
         const task = tasks[taskName];
-        const secondsNeeded = task.target;
+        const secondsNeeded = task.target || 30;
         const eventName = task.event_name ?? task.type ?? taskName;
 
-        if (taskName === 'WATCH_VIDEO' || taskName === 'WATCH_VIDEO_ON_MOBILE') {
+        if (
+            taskName === 'WATCH_VIDEO' || 
+            taskName === 'WATCH_VIDEO_ON_MOBILE' || 
+            taskName === 'WATCH_VIDEO_BY_STREAM' || 
+            taskName === 'LEARN_MORE'
+        ) {
             let secondsDone = readProgress(quest, eventName, taskName);
 
             while (secondsDone < secondsNeeded) {
