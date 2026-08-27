@@ -94,7 +94,6 @@ export class QuestManager {
         } catch {}
     }
 
-    // Safe session box updater with lock to prevent race conditions during parallel execution
     static async updateSessionBox(channel, questList, currentQuestName, statusType) {
         if (!channel) return;
         
@@ -111,8 +110,6 @@ export class QuestManager {
 
                 questList.forEach((q) => {
                     const qName = q.config.messages.quest_name;
-                    
-                    // Rewards ka naam fetch karne ke liye logic
                     let rewardText = 'Orbs';
                     const rewards = q.config.rewards_config?.rewards;
                     if (rewards && rewards.length > 0) {
@@ -173,45 +170,32 @@ export class QuestManager {
         const eventName = task.event_name ?? task.type ?? taskName;
 
         if (taskName === 'WATCH_VIDEO' || taskName === 'WATCH_VIDEO_ON_MOBILE') {
-            const maxFuture = 10, speed = 7, interval = 1;
-            const enrolledAt = quest.userStatus?.enrolled_at
-                ? new Date(quest.userStatus.enrolled_at).getTime()
-                : Date.now();
-
             let secondsDone = readProgress(quest, eventName, taskName);
 
-            while (true) {
-                const elapsed = Math.floor((Date.now() - enrolledAt) / 1000);
-                const maxAllowed = elapsed + maxFuture;
-                const diff = maxAllowed - secondsDone;
-                const timestamp = secondsDone + speed;
+            while (secondsDone < secondsNeeded) {
+                try {
+                    secondsDone = Math.min(secondsNeeded, secondsDone + 15);
+                    const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
+                        timestamp: secondsDone,
+                    });
+                    
+                    await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
 
-                if (diff >= speed) {
-                    try {
-                        const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
-                            timestamp: Math.min(secondsNeeded, timestamp + Math.random()),
-                        });
-                        secondsDone = Math.min(secondsNeeded, timestamp);
-                        
-                        await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
-
-                        if (res?.completed_at || res?.user_status?.completed_at) break;
-                    } catch (err) {}
+                    if (res?.completed_at || res?.user_status?.completed_at) break;
+                } catch (err) {
+                    await this.#timeout(2000);
                 }
-
-                if (secondsDone >= secondsNeeded) break;
-                await this.#timeout(interval * 1000);
+                await this.#timeout(500);
             }
 
             try {
                 await this.client.post(`/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
             } catch {}
 
-        } else if (taskName === 'PLAY_ON_DESKTOP') {
-            const interval = 30;
-            const maxDurationMs = (secondsNeeded + 600) * 1000;
+        } else if (taskName === 'PLAY_ON_DESKTOP' || taskName === 'STREAM_ON_DESKTOP') {
+            const maxDurationMs = (secondsNeeded + 300) * 1000;
             const startTime = Date.now();
-            let beats = 0, consecutiveErrors = 0;
+            let consecutiveErrors = 0;
 
             while (!quest.isCompleted()) {
                 if (Date.now() - startTime > maxDurationMs) break;
@@ -223,18 +207,17 @@ export class QuestManager {
                 } catch (err) {
                     consecutiveErrors++;
                     if (consecutiveErrors >= 5) return false;
-                    await this.#timeout(5_000);
+                    await this.#timeout(3000);
                     continue;
                 }
 
-                beats++;
-                if (beats % 5 === 0) await this.#refreshQuestStatus(quest);
-
-                const done = readProgress(quest, eventName, taskName);
+                await this.#refreshQuestStatus(quest);
                 await QuestManager.updateSessionBox(channel, allQuests, questName, '♡ running');
 
+                const done = readProgress(quest, eventName, taskName);
                 if (done >= secondsNeeded || quest.isCompleted()) break;
-                await this.#timeout(interval * 1000);
+                
+                await this.#timeout(10000);
             }
 
             try {
@@ -243,10 +226,8 @@ export class QuestManager {
             } catch {}
         }
 
-        // Quest Complete hone par status update
         await QuestManager.updateSessionBox(channel, allQuests, questName, '✓ done');
 
-        // User DM notification
         if (userId) {
             try {
                 const user = await this.client.users.fetch(userId);
@@ -274,3 +255,4 @@ function readProgress(quest, eventName, taskName) {
     const byTask  = progress[taskName]?.value;
     return Number(byEvent ?? byTask ?? 0) || 0;
 }
+
