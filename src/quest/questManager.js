@@ -9,6 +9,7 @@ const QuestTaskConfigType = {
     WATCH_VIDEO_ON_MOBILE: 'WATCH_VIDEO_ON_MOBILE',
     WATCH_VIDEO_BY_STREAM: 'WATCH_VIDEO_BY_STREAM',
     LEARN_MORE:            'LEARN_MORE',
+    WATCH_VIDEO_EMBED:     'WATCH_VIDEO_EMBED',
 };
 
 export class QuestManager {
@@ -48,8 +49,9 @@ export class QuestManager {
         return this.list().filter((q) => q.isCompleted() && !q.hasClaimedRewards());
     }
     filterQuestsValid() {
+        // Removed any hardcoded ID filters so no quest gets skipped
         return this.list().filter(
-            (q) => q.id !== '1412491570820812933' && !q.isCompleted() && !q.isExpired(),
+            (q) => !q.isCompleted() && !q.isExpired(),
         );
     }
 
@@ -175,7 +177,8 @@ export class QuestManager {
             taskName === 'WATCH_VIDEO' || 
             taskName === 'WATCH_VIDEO_ON_MOBILE' || 
             taskName === 'WATCH_VIDEO_BY_STREAM' || 
-            taskName === 'LEARN_MORE'
+            taskName === 'LEARN_MORE' ||
+            taskName === 'WATCH_VIDEO_EMBED'
         ) {
             let secondsDone = readProgress(quest, eventName, taskName);
 
