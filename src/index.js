@@ -64,8 +64,8 @@ client.tokenStore     = makeTokenStore(TOKEN);
 // Global variable taaki auto-created role ki ID store rahe
 global.AUTO_ROLE_ID = null;
 
-// Bot start hote hi invites cache karna aur auto-role check/create karna
-client.once('ready', async () => {
+// Bot start hote hi invites cache karna aur auto-role check/create karna (Fixed ready to clientReady)
+client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
     // Bot Activity Status update (V3)
