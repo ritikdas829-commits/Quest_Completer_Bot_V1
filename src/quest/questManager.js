@@ -185,26 +185,34 @@ export class QuestManager {
         ) {
             let secondsDone = readProgress(quest, eventName, taskName);
 
-            // Loop chalegi jab tak required seconds tak nahi pahunch jata (jitne min ka video hoga utna time lega)
-            while (secondsDone < secondsNeeded && !quest.isCompleted()) {
+            while (!quest.isCompleted() && secondsDone < secondsNeeded) {
                 try {
                     secondsDone = Math.min(secondsNeeded, secondsDone + 15);
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: secondsDone,
                     });
                     
+                    if (res?.user_status) {
+                        quest.updateUserStatus(extractStatus(res));
+                    }
+                    
                     await QuestManager.updateSessionBox(channel, allQuests, questName, `running (${Math.floor((secondsDone / secondsNeeded) * 100)}%)`);
 
-                    if (res?.completed_at || res?.user_status?.completed_at) break;
+                    if (res?.completed_at || res?.user_status?.completed_at || quest.isCompleted()) {
+                        break;
+                    }
                 } catch (err) {
                     await this.#timeout(2000);
                 }
-                await this.#timeout(3000); // Proper natural delay per chunk
+                await this.#timeout(3000);
             }
 
             try {
-                await this.client.post(`/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
+                const finalRes = await this.client.post(`/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
+                if (finalRes) quest.updateUserStatus(extractStatus(finalRes));
             } catch {}
+
+            await this.#refreshQuestStatus(quest);
 
         } else if (taskName === 'PLAY_ON_DESKTOP' || taskName === 'STREAM_ON_DESKTOP') {
             const maxDurationMs = (secondsNeeded + 300) * 1000;
@@ -269,4 +277,3 @@ function readProgress(quest, eventName, taskName) {
     const byTask  = progress[taskName]?.value;
     return Number(byEvent ?? byTask ?? 0) || 0;
 }
-
