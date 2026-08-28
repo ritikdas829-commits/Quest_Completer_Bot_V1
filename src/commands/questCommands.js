@@ -41,6 +41,21 @@ function checkUserAccess(member, interactionOrMessage) {
     const userId = member.id || member.author?.id;
     if (!userId) return false;
 
+    // Check if user has boosted the server (Discord native boost or custom boost role)
+    const isBooster = member.premiumSince !== null || member.roles?.premiumSubscriberRole;
+    const customBoostRole = member.guild?.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
+    const hasCustomBoostRole = customBoostRole && member.roles?.cache.has(customBoostRole.id);
+
+    const targetRole = member.guild?.roles.cache.find(r => r.name === 'Quest Access');
+
+    // Agar user booster hai, toh direct access do aur role bhi assign kar do!
+    if (isBooster || hasCustomBoostRole) {
+        if (targetRole && member.roles && !member.roles.cache.has(targetRole.id)) {
+            member.roles.add(targetRole).catch(() => {});
+        }
+        return true;
+    }
+
     const dbPath = path.resolve('./invitesData.json');
     if (fs.existsSync(dbPath)) {
         try {
@@ -48,7 +63,6 @@ function checkUserAccess(member, interactionOrMessage) {
             const userInvites = inviteData[userId]?.count || 0;
             
             if (member.guild && member.roles) {
-                const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
                 if (userInvites >= 2) {
                     if (targetRole && !member.roles.cache.has(targetRole.id)) {
                         member.roles.add(targetRole).catch(() => {});
@@ -90,10 +104,17 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
             } catch {}
         }
 
-        const progressText = `${Math.min(currentInvites, 2)}/2 invites completed`;
+        const progressText = `${Math.min(currentInvites, 2)}/2`;
+        
+        // Naya aur professional Access Denied message
         c.addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-                `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**`
+                `❌ **Access Denied**\n\n` +
+                `You need **Quest Access** to run quest commands on this server.\n\n` +
+                `📊 **Your Invites Progress:** \`${progressText} invites completed\`\n\n` +
+                `✨ **How to get access instantly:**\n` +
+                `• Invite **2 friends** to the server *(Automatically unlocks when complete!)*\n` +
+                `• **Boost the Server** *(Gives instant access while your boost is active!)*`
             ),
         );
     }
