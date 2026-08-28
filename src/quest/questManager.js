@@ -97,7 +97,7 @@ export class QuestManager {
         } catch {}
     }
 
-    static async updateSessionBox(channel, questList, currentQuestName, statusType) {
+    static async updateSessionBox(channel, questList) {
         if (!channel) return;
         
         QuestManager.#updateLock = QuestManager.#updateLock.then(async () => {
@@ -121,9 +121,9 @@ export class QuestManager {
 
                     let status = '⏳ Waiting...';
                     if (q.isCompleted()) {
-                        status = '✨ Completed';
-                    } else if (qName === currentQuestName) {
-                        status = `⚡ ${statusType}`;
+                        status = '✨ done';
+                    } else {
+                        status = '⚡ running';
                     }
 
                     description += `🔹 **${qName}**\n` +
@@ -131,13 +131,13 @@ export class QuestManager {
                                    `┗ 📌 **Status:** ${status}\n\n`;
                 });
 
-                const headerText = `🚀 **Live Progress:** \`${completedCount} / ${totalQuests} Completed\``;
+                const headerText = `🚀 **Quest Session Complete**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\``;
 
                 const embed = new EmbedBuilder()
-                    .setColor('#5865F2')
-                    .setTitle('🎮 Automated Quest Dashboard')
+                    .setColor('#ff75a0')
+                    .setTitle('✨ Coquettes Style Autoprogess')
                     .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
-                    .setFooter({ text: 'Quest Completer V3 • Auto Runner' })
+                    .setFooter({ text: 'Auto Runner • Multi-threaded' })
                     .setTimestamp();
 
                 if (QuestManager.activeSessionMessage) {
@@ -155,11 +155,9 @@ export class QuestManager {
         const questName = quest.config.messages.quest_name;
 
         if (!quest.isEnrolledQuest()) {
-            await QuestManager.updateSessionBox(channel, allQuests, questName, 'enrolling...');
             try {
                 await this.acceptQuest(quest.id);
             } catch (err) {
-                await QuestManager.updateSessionBox(channel, allQuests, questName, '❌ failed');
                 return false;
             }
         }
@@ -196,7 +194,8 @@ export class QuestManager {
                         quest.updateUserStatus(extractStatus(res));
                     }
                     
-                    await QuestManager.updateSessionBox(channel, allQuests, questName, `running (${Math.floor((secondsDone / secondsNeeded) * 100)}%)`);
+                    await this.#refreshQuestStatus(quest);
+                    await QuestManager.updateSessionBox(channel, allQuests);
 
                     if (res?.completed_at || res?.user_status?.completed_at || quest.isCompleted()) {
                         break;
@@ -204,7 +203,7 @@ export class QuestManager {
                 } catch (err) {
                     await this.#timeout(2000);
                 }
-                await this.#timeout(3000);
+                await this.#timeout(2000);
             }
 
             try {
@@ -217,7 +216,6 @@ export class QuestManager {
         } else if (taskName === 'PLAY_ON_DESKTOP' || taskName === 'STREAM_ON_DESKTOP') {
             const maxDurationMs = (secondsNeeded + 300) * 1000;
             const startTime = Date.now();
-            let consecutiveErrors = 0;
 
             while (!quest.isCompleted()) {
                 if (Date.now() - startTime > maxDurationMs) break;
@@ -225,21 +223,18 @@ export class QuestManager {
                 try {
                     const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
                     quest.updateUserStatus(extractStatus(res));
-                    consecutiveErrors = 0;
                 } catch (err) {
-                    consecutiveErrors++;
-                    if (consecutiveErrors >= 5) return false;
                     await this.#timeout(3000);
                     continue;
                 }
 
                 await this.#refreshQuestStatus(quest);
-                await QuestManager.updateSessionBox(channel, allQuests, questName, 'running');
+                await QuestManager.updateSessionBox(channel, allQuests);
 
                 const done = readProgress(quest, eventName, taskName);
                 if (done >= secondsNeeded || quest.isCompleted()) break;
                 
-                await this.#timeout(10000);
+                await this.#timeout(5000);
             }
 
             try {
@@ -248,13 +243,14 @@ export class QuestManager {
             } catch {}
         }
 
-        await QuestManager.updateSessionBox(channel, allQuests, questName, 'done');
+        await QuestManager.updateSessionBox(channel, allQuests);
 
+        // Jaise hi yeh quest complete hoga, turant user ko DM chala jayega aur name announce hoga
         if (userId) {
             try {
                 const user = await this.client.users.fetch(userId);
                 if (user) {
-                    await user.send(`✅ Your quest **"${questName}"** has been successfully completed! 🎉`);
+                    await user.send(`✨ **${questName}**\n↳ 200 Orbs\n✓ done`);
                 }
             } catch (dmErr) {}
         }
@@ -277,3 +273,4 @@ function readProgress(quest, eventName, taskName) {
     const byTask  = progress[taskName]?.value;
     return Number(byEvent ?? byTask ?? 0) || 0;
 }
+
