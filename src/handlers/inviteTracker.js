@@ -1,3 +1,4 @@
+
 import fs from 'fs';
 import path from 'path';
 
@@ -35,7 +36,7 @@ export async function cacheGuildInvites(client) {
     });
 }
 
-// Handle member join & track real invites
+// Handle member join & track real invites with 14-day rejoin protection
 export async function handleInviteJoin(member) {
     if (!member || member.user.bot) return;
 
@@ -71,16 +72,33 @@ export async function handleInviteJoin(member) {
                 return;
             }
 
+            // Database structure initializations
             if (!inviteData[inviter.id]) {
-                inviteData[inviter.id] = { count: 0, invitedUsers: [] };
+                inviteData[inviter.id] = { count: 0, invitedUsers: [], leaveHistory: {} };
+            }
+            if (!inviteData[inviter.id].leaveHistory) {
+                inviteData[inviter.id].leaveHistory = {};
             }
 
-            // Prevent rejoin exploit and track unique users
-            if (!inviteData[inviter.id].invitedUsers.includes(member.id)) {
-                inviteData[inviter.id].invitedUsers.push(member.id);
-                inviteData[inviter.id].count += 1;
-                saveDB();
+            // 14-Day Rejoin Cooldown Check
+            const now = Date.now();
+            const fourteenDaysInMs = 14 * 24 * 60 * 60 * 1000;
+            const lastLeftTime = inviteData[inviter.id].leaveHistory[member.id] || 0;
+
+            const isRecentRejoin = (now - lastLeftTime) < fourteenDaysInMs;
+
+            // Check if user is currently active or within the 14-day restriction period
+            const isAlreadyInvited = inviteData[inviter.id].invitedUsers.includes(member.id);
+
+            if (isAlreadyInvited || isRecentRejoin) {
+                console.log(`[Anti-Rejoin] Ignored rejoin exploit for user ${member.user.tag} under inviter ${inviter.tag}`);
+                return; // Count nahi badhega agar 14 din ke andar wapas aaya hai
             }
+
+            // Add to active invited users and increase count
+            inviteData[inviter.id].invitedUsers.push(member.id);
+            inviteData[inviter.id].count += 1;
+            saveDB();
 
             const currentCount = inviteData[inviter.id].count;
             const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
@@ -101,7 +119,7 @@ export async function handleInviteJoin(member) {
     }
 }
 
-// Handle member leave (Remove access only if active count drops below 2)
+// Handle member leave (Remove access only if active count drops below 2, and save leave timestamp)
 export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
@@ -121,13 +139,18 @@ export async function handleInviteLeave(member) {
             if (index !== -1) {
                 data.invitedUsers.splice(index, 1);
                 data.count = Math.max(0, (data.count || 1) - 1);
+                
+                // Track when this user left to enforce the 14-day rejoin block
+                if (!data.leaveHistory) data.leaveHistory = {};
+                data.leaveHistory[member.id] = Date.now();
+
                 saveDB();
 
                 const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
                 if (targetRole) {
                     const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
                     
-                    // Remove role ONLY IF active count drops below 2 (e.g., from 2 to 1)
+                    // Remove role ONLY IF active count drops below 2
                     if (inviterMember && data.count < 2) {
                         if (inviterMember.roles.cache.has(targetRole.id)) {
                             await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
@@ -177,4 +200,3 @@ export async function checkCommandAccess(user, member) {
                  `2. Once you reach **2 active invites**, your **Access** will be automatically unlocked so you can run commands!` 
     };
 }
-
