@@ -26,7 +26,10 @@ export function makeTokenStore(secret) {
     return new TokenStore(secret);
 }
 
-function checkUserAccess(member) {
+function checkUserAccess(member, interactionOrMessage) {
+    // Agar server (guild) nahi hai matlab yeh Direct Message (DM) hai, toh turant false (block) kar do
+    if (interactionOrMessage && !interactionOrMessage.guild) return false;
+
     if (!member) return true;
     
     try {
@@ -64,27 +67,38 @@ function checkUserAccess(member) {
 }
 
 async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
-    const member = interactionOrMessage.member;
-    const userId = member ? member.id : interactionOrMessage.author.id;
+    const isDM = interactionOrMessage && !interactionOrMessage.guild;
     
-    let currentInvites = 0;
-    const dbPath = path.resolve('./invitesData.json');
-    if (fs.existsSync(dbPath)) {
-        try {
-            const inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-            currentInvites = inviteData[userId]?.count || 0;
-        } catch {}
+    const c = new ContainerBuilder().setAccentColor(0xED4245);
+    
+    if (isDM) {
+        c.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                `❌ **DM Commands Disabled**\n\nYou cannot use quest commands inside Direct Messages (DMs). Please use them inside the server channels!`
+            ),
+        );
+    } else {
+        const member = interactionOrMessage.member;
+        const userId = member ? member.id : interactionOrMessage.author.id;
+        
+        let currentInvites = 0;
+        const dbPath = path.resolve('./invitesData.json');
+        if (fs.existsSync(dbPath)) {
+            try {
+                const inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+                currentInvites = inviteData[userId]?.count || 0;
+            } catch {}
+        }
+
+        const progressText = `${Math.min(currentInvites, 2)}/2 invites completed`;
+        c.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**`
+            ),
+        );
     }
 
-    const progressText = `${Math.min(currentInvites, 2)}/2 invites completed`;
-    const c = new ContainerBuilder().setAccentColor(0xED4245);
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `❌ **Access Denied**\n\nYou must complete **2 invites** to use quest commands!\n\n📊 **Your Progress:** \`${progressText}\`\n\n🎫 **After completing 2 invites, please open a ticket!**`
-        ),
-    );
-
-    const payload = { components: [c], flags: MessageFlags.IsComponentsV2 | (isEphemeral ? MessageFlags.Ephemeral : 0) };
+    const payload = { components: [c], flags: MessageFlags.IsComponentsV2 | (isEphemeral && !isDM ? MessageFlags.Ephemeral : 0) };
     try {
         if (interactionOrMessage.reply && typeof interactionOrMessage.reply === 'function') {
             if (!interactionOrMessage.deferred && !interactionOrMessage.replied) {
@@ -362,12 +376,12 @@ export const questCmd = {
     data: new SlashCommandBuilder().setName('quest').setDescription('Complete all available Discord quests in a single box session'),
     prefix: 'quest',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply();
         await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts));
     },
 };
@@ -376,12 +390,12 @@ export const questAllCmd = {
     data: new SlashCommandBuilder().setName('q').setDescription('Complete all quests at once in a single session box'),
     prefix: 'q',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply();
         await runQuestAll(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         await runQuestAll(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts));
     },
 };
@@ -390,12 +404,12 @@ export const questListCmd = {
     data: new SlashCommandBuilder().setName('questlist').setDescription('List all Discord quests and their status'),
     prefix: 'questlist',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply();
         await runQuestList(interaction.user.id, client.tokenStore, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         await runQuestList(message.author.id, client.tokenStore, (opts) => message.channel.send(opts));
     },
 };
@@ -404,12 +418,12 @@ export const tokenCheckCmd = {
     data: new SlashCommandBuilder().setName('tokencheck').setDescription('Check whether your saved Discord token is still valid'),
     prefix: 'tokencheck',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply({ flags: 64 });
         await runTokenCheck(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         await runTokenCheck(message.author.id, client.tokenStore, (opts) => message.reply(opts));
     },
 };
@@ -418,12 +432,12 @@ export const autoquestCmd = {
     data: new SlashCommandBuilder().setName('autoquest').setDescription('Auto-complete every new quest the moment it drops'),
     prefix: 'autoquest',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply({ flags: 64 });
         await runAutoquestToggle(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts));
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         await runAutoquestToggle(message.author.id, client.tokenStore, (opts) => message.reply(opts));
     },
 };
@@ -432,11 +446,11 @@ export const linkCmd = {
     data: new SlashCommandBuilder().setName('link').setDescription('Save your Discord token'),
     prefix: 'link',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.showModal(buildLinkModal());
     },
     async prefixExecute(message, args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         const ts = client.tokenStore;
         const inlineToken = args.join('').trim();
         if (inlineToken) {
@@ -473,7 +487,7 @@ export const unlinkCmd = {
     data: new SlashCommandBuilder().setName('unlink').setDescription('Remove your saved Discord token'),
     prefix: 'unlink',
     async execute(interaction, client) {
-        if (!checkUserAccess(interaction.member)) { await sendAccessDenied(interaction); return; }
+        if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         const ts = client.tokenStore;
         const removed = ts.remove(interaction.user.id);
         disableAutoquest(interaction.user.id);
@@ -482,7 +496,7 @@ export const unlinkCmd = {
         await interaction.reply({ components: [c], flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
     },
     async prefixExecute(message, _args, client) {
-        if (!checkUserAccess(message.member)) { await sendAccessDenied(message, false); return; }
+        if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
         const ts = client.tokenStore;
         const removed = ts.remove(message.author.id);
         disableAutoquest(message.author.id);
