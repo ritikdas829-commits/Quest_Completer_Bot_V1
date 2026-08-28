@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 
@@ -86,13 +85,11 @@ export async function handleInviteJoin(member) {
             const lastLeftTime = inviteData[inviter.id].leaveHistory[member.id] || 0;
 
             const isRecentRejoin = (now - lastLeftTime) < fourteenDaysInMs;
-
-            // Check if user is currently active or within the 14-day restriction period
             const isAlreadyInvited = inviteData[inviter.id].invitedUsers.includes(member.id);
 
             if (isAlreadyInvited || isRecentRejoin) {
                 console.log(`[Anti-Rejoin] Ignored rejoin exploit for user ${member.user.tag} under inviter ${inviter.tag}`);
-                return; // Count nahi badhega agar 14 din ke andar wapas aaya hai
+                return; 
             }
 
             // Add to active invited users and increase count
@@ -166,7 +163,7 @@ export async function handleInviteLeave(member) {
     }
 }
 
-// Check command access with clear English instructions
+// Check command access with Server Booster support, 2 Invites rule & clean message
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
@@ -174,8 +171,23 @@ export async function checkCommandAccess(user, member) {
         return { allowed: true };
     }
 
-    const currentCount = inviteData[user.id]?.count || 0;
+    // Check if the user has boosted the server
+    const isBooster = member.premiumSince !== null || member.roles.premiumSubscriberRole;
+    const customBoostRole = member.guild.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
+    const hasCustomBoostRole = customBoostRole && member.roles.cache.has(customBoostRole.id);
+
     const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
+
+    // If user boosted the server, grant direct access!
+    if (isBooster || hasCustomBoostRole) {
+        if (targetRole && !member.roles.cache.has(targetRole.id)) {
+            await member.roles.add(targetRole).catch(() => {});
+        }
+        return { allowed: true };
+    }
+
+    // Normal Invite Check
+    const currentCount = inviteData[user.id]?.count || 0;
 
     if (currentCount >= 2) {
         if (targetRole && !member.roles.cache.has(targetRole.id)) {
@@ -192,11 +204,12 @@ export async function checkCommandAccess(user, member) {
 
     return { 
         allowed: false, 
-        message: `🛡️ **Quest Access Locked!**\n\n` +
-                 `You need to complete **2 valid invites** on the server to use quest commands.\n\n` +
-                 `📊 **Your Progress:** \`${progressText} Invites Completed\`\n\n` +
-                 `💡 **What you need to do:**\n` +
-                 `1. Generate your invite link and invite your friends.\n` +
-                 `2. Once you reach **2 active invites**, your **Access** will be automatically unlocked so you can run commands!` 
+        message: `❌ **Access Denied**\n\n` +
+                 `You need **Quest Access** to run quest commands on this server.\n\n` +
+                 `📊 **Your Invites Progress:** \`${progressText} invites completed\`\n\n` +
+                 `✨ **How to get access instantly:**\n` +
+                 `• Invite **2 friends** to the server *(Automatically unlocks when complete!)*\n` +
+                 `• **Boost the Server** *(Gives instant access while your boost is active!)*` 
     };
 }
+
