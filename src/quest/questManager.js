@@ -16,7 +16,6 @@ export class QuestManager {
     #quests = new Map();
     client;
     static activeSessionMessage = null;
-    static #updateLock = Promise.resolve();
 
     constructor(client, quests = []) {
         this.client = client;
@@ -99,56 +98,46 @@ export class QuestManager {
 
     static async updateSessionBox(channel, questList) {
         if (!channel) return;
-        
-        QuestManager.#updateLock = QuestManager.#updateLock.then(async () => {
-            try {
-                let description = '';
-                let completedCount = 0;
+        try {
+            let description = '';
+            let completedCount = 0;
 
-                questList.forEach((q) => {
-                    if (q.isCompleted()) completedCount++;
-                });
+            questList.forEach((q) => {
+                if (q.isCompleted()) completedCount++;
+            });
 
-                const totalQuests = questList.length;
+            const totalQuests = questList.length;
 
-                questList.forEach((q) => {
-                    const qName = q.config.messages.quest_name;
-                    let rewardText = 'Orbs';
-                    const rewards = q.config.rewards_config?.rewards;
-                    if (rewards && rewards.length > 0) {
-                        rewardText = rewards[0].messages?.name || 'Orbs';
-                    }
-
-                    let status = '⏳ Waiting...';
-                    if (q.isCompleted()) {
-                        status = '✨ done';
-                    } else {
-                        status = '⚡ running';
-                    }
-
-                    description += `🔹 **${qName}**\n` +
-                                   `┗ 🎁 **Reward:** ${rewardText}\n` +
-                                   `┗ 📌 **Status:** ${status}\n\n`;
-                });
-
-                const headerText = `🚀 **Quest Session Complete**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\``;
-
-                const embed = new EmbedBuilder()
-                    .setColor('#ff75a0')
-                    .setTitle('✨ Coquettes Style Autoprogess')
-                    .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
-                    .setFooter({ text: 'Auto Runner • Multi-threaded' })
-                    .setTimestamp();
-
-                if (QuestManager.activeSessionMessage) {
-                    await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
-                } else {
-                    QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+            questList.forEach((q) => {
+                const qName = q.config.messages.quest_name;
+                let rewardText = 'Orbs';
+                const rewards = q.config.rewards_config?.rewards;
+                if (rewards && rewards.length > 0) {
+                    rewardText = rewards[0].messages?.name || 'Orbs';
                 }
-            } catch (err) {}
-        });
 
-        await QuestManager.#updateLock;
+                let status = q.isCompleted() ? '✨ done' : '⚡ running';
+
+                description += `🔹 **${qName}**\n` +
+                               `┗ 🎁 **Reward:** ${rewardText}\n` +
+                               `┗ 📌 **Status:** ${status}\n\n`;
+            });
+
+            const headerText = `🚀 **Quest Session Complete**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\``;
+
+            const embed = new EmbedBuilder()
+                .setColor('#ff75a0')
+                .setTitle('✨ Coquettes Style Autoprogess')
+                .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
+                .setFooter({ text: 'Auto Runner • Multi-threaded' })
+                .setTimestamp();
+
+            if (QuestManager.activeSessionMessage) {
+                await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
+            } else {
+                QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+            }
+        } catch (err) {}
     }
 
     async doingQuest(quest, log = console.log, channel = null, userId = null, allQuests = []) {
@@ -194,9 +183,6 @@ export class QuestManager {
                         quest.updateUserStatus(extractStatus(res));
                     }
                     
-                    await this.#refreshQuestStatus(quest);
-                    await QuestManager.updateSessionBox(channel, allQuests);
-
                     if (res?.completed_at || res?.user_status?.completed_at || quest.isCompleted()) {
                         break;
                     }
@@ -228,9 +214,6 @@ export class QuestManager {
                     continue;
                 }
 
-                await this.#refreshQuestStatus(quest);
-                await QuestManager.updateSessionBox(channel, allQuests);
-
                 const done = readProgress(quest, eventName, taskName);
                 if (done >= secondsNeeded || quest.isCompleted()) break;
                 
@@ -243,9 +226,9 @@ export class QuestManager {
             } catch {}
         }
 
-        await QuestManager.updateSessionBox(channel, allQuests);
+        // Background session box update (non-blocking)
+        QuestManager.updateSessionBox(channel, allQuests);
 
-        // Jaise hi yeh quest complete hoga, turant user ko DM chala jayega aur name announce hoga
         if (userId) {
             try {
                 const user = await this.client.users.fetch(userId);
