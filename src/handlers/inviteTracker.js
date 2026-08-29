@@ -116,7 +116,7 @@ export async function handleInviteJoin(member) {
     }
 }
 
-// Handle member leave (Remove access only if active count drops below 2, and save leave timestamp)
+// Handle member leave (FIXED: Count kam hone par tabhi role hatega jab total active count 2 se kam ho jaye)
 export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
@@ -147,7 +147,7 @@ export async function handleInviteLeave(member) {
                 if (targetRole) {
                     const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
                     
-                    // Remove role ONLY IF active count drops below 2
+                    // FIXED: Role tabhi hatega jab real count strictly 2 se kam ho (matlab 1 ya 0 ho)
                     if (inviterMember && data.count < 2) {
                         if (inviterMember.roles.cache.has(targetRole.id)) {
                             await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
