@@ -7,7 +7,7 @@ import deployCommands from './utils/deployCommands.js';
 import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 import { cacheGuildInvites, handleInviteJoin, handleInviteLeave, checkCommandAccess } from './handlers/inviteTracker.js';
-import OpenAI from 'openai';
+import Groq from 'groq-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -39,8 +39,8 @@ function banner() {
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) { console.error('DISCORD_TOKEN is not set.'); process.exit(1); }
 
-// OpenAI Client Initialization
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Groq Client Initialization (Free Tier)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Ensure data files exist
 if (!existsSync('tokens.json'))    writeFileSync('tokens.json', '{}');
@@ -65,17 +65,13 @@ client.commands       = new Collection();
 client.prefixCommands = new Collection();
 client.tokenStore     = makeTokenStore(TOKEN);
 
-// Global variable taaki auto-created role ki ID store rahe
 global.AUTO_ROLE_ID = null;
 
-// Bot start hote hi invites cache karna aur auto-role check/create karna
 client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
-    // Bot Activity Status update
     client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
     
-    // Har server mein check karega aur role bana lega agar nahi hai
     client.guilds.cache.forEach(async (guild) => {
         try {
             let role = guild.roles.cache.find(r => r.name === 'Quest Access');
@@ -96,26 +92,21 @@ client.once('clientReady', async () => {
     console.log('Invite tracker and Auto-Role system successfully initialized!');
 });
 
-// Member Join Event
 client.on('guildMemberAdd', (member) => {
     handleInviteJoin(member);
 });
 
-// Member Leave Event
 client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands & OpenAI AI Support Feature)
+// Message Handler (Prefix Commands & Groq AI Support Feature)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    
-    // Check taaki message do baar process na ho
     if (message.commandProcessed) return;
 
     const prefix = '.'; 
     
-    // Agar message prefix se shuru ho toh prefix commands handle karein
     if (message.content.startsWith(prefix)) {
         const args = message.content.slice(prefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
@@ -137,30 +128,30 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // AI Support Chat Feature (Yahan apni Support Channel ID daalein jahan AI jawab dega)
+    // Groq AI Support Chat Feature
     const SUPPORT_CHANNEL_ID = process.env.SUPPORT_CHANNEL_ID || 'YOUR_SUPPORT_CHANNEL_ID';
     
     if (message.channel.id === SUPPORT_CHANNEL_ID) {
         try {
             await message.channel.sendTyping();
 
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
+            const completion = await groq.chat.completions.create({
+                model: "llama-3.3-70b-versatile", // Fast and free Groq model
                 messages: [
                     { role: "system", content: "You are a helpful support assistant for this Discord server." },
                     { role: "user", content: message.content }
                 ],
             });
 
-            const reply = completion.choices[0].message.content;
+            const reply = completion.choices[0]?.message?.content || "No response generated.";
             await message.reply(reply);
         } catch (err) {
-            console.error("AI Error:", err);
+            console.error("Groq AI Error:", err);
+            await message.reply("Sorry, I encountered an error while processing your AI request.").catch(() => {});
         }
     }
 });
 
-// Button Interaction Handler
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
