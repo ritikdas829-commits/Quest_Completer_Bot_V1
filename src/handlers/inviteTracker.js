@@ -92,9 +92,9 @@ export async function handleInviteJoin(member) {
                 return; 
             }
 
-            // Add to active invited users and increase count
+            // Add to active invited users and update count based on array length
             inviteData[inviter.id].invitedUsers.push(member.id);
-            inviteData[inviter.id].count += 1;
+            inviteData[inviter.id].count = inviteData[inviter.id].invitedUsers.length;
             saveDB();
 
             const currentCount = inviteData[inviter.id].count;
@@ -116,7 +116,7 @@ export async function handleInviteJoin(member) {
     }
 }
 
-// Handle member leave (FIXED: Count kam hone par tabhi role hatega jab total active count 2 se kam ho jaye)
+// Handle member leave (Role removes only if active count drops strictly below 2)
 export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
@@ -135,7 +135,9 @@ export async function handleInviteLeave(member) {
             const index = data.invitedUsers.indexOf(member.id);
             if (index !== -1) {
                 data.invitedUsers.splice(index, 1);
-                data.count = Math.max(0, (data.count || 1) - 1);
+                
+                // Count accurately syncs with remaining active users length
+                data.count = data.invitedUsers.length;
                 
                 // Track when this user left to enforce the 14-day rejoin block
                 if (!data.leaveHistory) data.leaveHistory = {};
@@ -147,7 +149,7 @@ export async function handleInviteLeave(member) {
                 if (targetRole) {
                     const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
                     
-                    // FIXED: Role tabhi hatega jab real count strictly 2 se kam ho (matlab 1 ya 0 ho)
+                    // Role will only be removed if active count drops strictly below 2 (e.g., 1 or 0)
                     if (inviterMember && data.count < 2) {
                         if (inviterMember.roles.cache.has(targetRole.id)) {
                             await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
@@ -163,7 +165,7 @@ export async function handleInviteLeave(member) {
     }
 }
 
-// Check command access with Server Booster support, 2 Invites rule & clean message
+// Check command access with Server Booster support & 2 Invites rule
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
@@ -212,4 +214,3 @@ export async function checkCommandAccess(user, member) {
                  `• **Boost the Server** *(Gives instant access while your boost is active!)*` 
     };
 }
-
