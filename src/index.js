@@ -136,7 +136,7 @@ client.on('messageCreate', async (message) => {
             await message.channel.sendTyping();
 
             const completion = await groq.chat.completions.create({
-                model: "llama-3.3-70b-specdec", // Latest active Groq model
+                model: "llama-3.1-8b-instant", // Using active lightweight model
                 messages: [
                     { role: "system", content: "You are a helpful support assistant for this Discord server." },
                     { role: "user", content: message.content }
@@ -189,7 +189,7 @@ for (const file of commandFiles) {
     }
 }
 
-const eventFiles = readdirSync(join(__dirname, 'events')).fileList?.filter(f => f.endsWith('.js')) || readdirSync(join(__dirname, 'events')).filter(f => f.endsWith('.js'));
+const eventFiles = readdirSync(join(__dirname, 'events')).filter(f => f.endsWith('.js'));
 for (const file of eventFiles) {
     const mod   = await import(pathToFileURL(join(__dirname, 'events', file)).href);
     const event = mod.default;
