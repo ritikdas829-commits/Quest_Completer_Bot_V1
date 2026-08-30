@@ -7,7 +7,6 @@ import deployCommands from './utils/deployCommands.js';
 import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 import { cacheGuildInvites, handleInviteJoin, handleInviteLeave, checkCommandAccess } from './handlers/inviteTracker.js';
-import Groq from 'groq-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -29,7 +28,7 @@ function banner() {
         `${col.white}${col.bright}   ╚══▀▀═╝  ╚═════╝  ╚═══╝   ╚═╝${col.reset}`,
         '',
         `${col.dim}  ─────────────────────────────────────────────────${col.reset}`,
-        `  ${col.green}●${col.reset} ${col.white}Quest Completer V3 + AI${col.reset}  ${col.dim}|${col.reset}   ${col.white}dsc.gg/synoraxdev${col.reset}`,
+        `  ${col.green}●${col.reset} ${col.white}Quest Completer V3${col.reset}  ${col.dim}|${col.reset}   ${col.white}dsc.gg/synoraxdev${col.reset}`,
         `${col.dim}  ─────────────────────────────────────────────────${col.reset}`,
         '',
     ];
@@ -38,9 +37,6 @@ function banner() {
 
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) { console.error('DISCORD_TOKEN is not set.'); process.exit(1); }
-
-// Groq Client Initialization (Free Tier)
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Ensure data files exist
 if (!existsSync('tokens.json'))    writeFileSync('tokens.json', '{}');
@@ -100,7 +96,7 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands & Groq AI Support Feature)
+// Message Handler (Prefix Commands)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.commandProcessed) return;
@@ -125,29 +121,6 @@ client.on('messageCreate', async (message) => {
                 await message.reply('There was an error executing that command!').catch(() => {});
             }
             return;
-        }
-    }
-
-    // Groq AI Support Chat Feature
-    const SUPPORT_CHANNEL_ID = process.env.SUPPORT_CHANNEL_ID || 'YOUR_SUPPORT_CHANNEL_ID';
-    
-    if (message.channel.id === SUPPORT_CHANNEL_ID) {
-        try {
-            await message.channel.sendTyping();
-
-            const completion = await groq.chat.completions.create({
-                model: "llama-3.1-8b-instant", // Using active lightweight model
-                messages: [
-                    { role: "system", content: "You are a helpful support assistant for this Discord server." },
-                    { role: "user", content: message.content }
-                ],
-            });
-
-            const reply = completion.choices[0]?.message?.content || "No response generated.";
-            await message.reply(reply);
-        } catch (err) {
-            console.error("Groq AI Error:", err);
-            await message.reply("Sorry, I encountered an error while processing your AI request.").catch(() => {});
         }
     }
 });
@@ -201,3 +174,4 @@ for (const file of eventFiles) {
 }
 
 client.login(TOKEN);
+
