@@ -7,6 +7,7 @@ import deployCommands from './utils/deployCommands.js';
 import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 import { cacheGuildInvites, handleInviteJoin, handleInviteLeave, checkCommandAccess } from './handlers/inviteTracker.js';
+import OpenAI from 'openai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -28,7 +29,7 @@ function banner() {
         `${col.white}${col.bright}   ╚══▀▀═╝  ╚═════╝  ╚═══╝   ╚═╝${col.reset}`,
         '',
         `${col.dim}  ─────────────────────────────────────────────────${col.reset}`,
-        `  ${col.green}●${col.reset} ${col.white}Quest Completer V3${col.reset}  ${col.dim}|${col.reset}   ${col.white}dsc.gg/synoraxdev${col.reset}`,
+        `  ${col.green}●${col.reset} ${col.white}Quest Completer V3 + AI${col.reset}  ${col.dim}|${col.reset}   ${col.white}dsc.gg/synoraxdev${col.reset}`,
         `${col.dim}  ─────────────────────────────────────────────────${col.reset}`,
         '',
     ];
@@ -37,6 +38,9 @@ function banner() {
 
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) { console.error('DISCORD_TOKEN is not set.'); process.exit(1); }
+
+// OpenAI Client Initialization
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Ensure data files exist
 if (!existsSync('tokens.json'))    writeFileSync('tokens.json', '{}');
@@ -64,11 +68,11 @@ client.tokenStore     = makeTokenStore(TOKEN);
 // Global variable taaki auto-created role ki ID store rahe
 global.AUTO_ROLE_ID = null;
 
-// Bot start hote hi invites cache karna aur auto-role check/create karna (Fixed ready to clientReady)
+// Bot start hote hi invites cache karna aur auto-role check/create karna
 client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
-    // Bot Activity Status update (V3)
+    // Bot Activity Status update
     client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
     
     // Har server mein check karega aur role bana lega agar nahi hai
@@ -97,12 +101,12 @@ client.on('guildMemberAdd', (member) => {
     handleInviteJoin(member);
 });
 
-// Member Leave Event (Added to fix rejoin exploit)
+// Member Leave Event
 client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Prefix Command Message Handler (.queststatus, etc.) - Single Message Protection Added
+// Message Handler (Prefix Commands & OpenAI AI Support Feature)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     
@@ -110,26 +114,49 @@ client.on('messageCreate', async (message) => {
     if (message.commandProcessed) return;
 
     const prefix = '.'; 
-    if (!message.content.startsWith(prefix)) return;
+    
+    // Agar message prefix se shuru ho toh prefix commands handle karein
+    if (message.content.startsWith(prefix)) {
+        const args = message.content.slice(prefix.length).trim().split(/ +/);
+        const commandName = args.shift().toLowerCase();
 
-    const args = message.content.slice(prefix.length).trim().split(/ +/);
-    const commandName = args.shift().toLowerCase();
-
-    const command = client.prefixCommands.get(commandName);
-    if (!command) return;
-
-    // Mark message as processed
-    message.commandProcessed = true;
-
-    try {
-        if (command.prefixExecute) {
-            await command.prefixExecute(message, args, client);
-        } else {
-            await command.execute(message, client);
+        const command = client.prefixCommands.get(commandName);
+        if (command) {
+            message.commandProcessed = true;
+            try {
+                if (command.prefixExecute) {
+                    await command.prefixExecute(message, args, client);
+                } else {
+                    await command.execute(message, client);
+                }
+            } catch (error) {
+                console.error(error);
+                await message.reply('There was an error executing that command!').catch(() => {});
+            }
+            return;
         }
-    } catch (error) {
-        console.error(error);
-        await message.reply('There was an error executing that command!').catch(() => {});
+    }
+
+    // AI Support Chat Feature (Yahan apni Support Channel ID daalein jahan AI jawab dega)
+    const SUPPORT_CHANNEL_ID = process.env.SUPPORT_CHANNEL_ID || 'YOUR_SUPPORT_CHANNEL_ID';
+    
+    if (message.channel.id === SUPPORT_CHANNEL_ID) {
+        try {
+            await message.channel.sendTyping();
+
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: "You are a helpful support assistant for this Discord server." },
+                    { role: "user", content: message.content }
+                ],
+            });
+
+            const reply = completion.choices[0].message.content;
+            await message.reply(reply);
+        } catch (err) {
+            console.error("AI Error:", err);
+        }
     }
 });
 
