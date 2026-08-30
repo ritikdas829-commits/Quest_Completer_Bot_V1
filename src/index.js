@@ -136,7 +136,7 @@ client.on('messageCreate', async (message) => {
             await message.channel.sendTyping();
 
             const completion = await groq.chat.completions.create({
-                model: "llama3-8b-8192", // Standard and stable Groq model
+                model: "llama-3.1-70b-versatile", // Latest active Groq model
                 messages: [
                     { role: "system", content: "You are a helpful support assistant for this Discord server." },
                     { role: "user", content: message.content }
