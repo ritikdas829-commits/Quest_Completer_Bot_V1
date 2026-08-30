@@ -112,6 +112,7 @@ export class QuestManager {
         try {
             let description = '';
             let completedCount = 0;
+            let totalOrbsEarned = 0;
 
             questList.forEach((q) => {
                 if (q.isCompleted()) completedCount++;
@@ -122,9 +123,15 @@ export class QuestManager {
             questList.forEach((q) => {
                 const qName = q.config.messages.quest_name;
                 let rewardText = 'Orbs';
+                let orbAmount = 200; // Default amount per quest
+
                 const rewards = q.config.rewards_config?.rewards;
                 if (rewards && rewards.length > 0) {
                     rewardText = rewards[0].messages?.name || 'Orbs';
+                }
+
+                if (q.isCompleted()) {
+                    totalOrbsEarned += orbAmount;
                 }
 
                 let status = q.isCompleted() ? '✨ done' : '⚡ running';
@@ -134,7 +141,7 @@ export class QuestManager {
                                `┗ 📌 **Status:** ${status}\n\n`;
             });
 
-            const headerText = `🚀 **Quest Session Progress**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\``;
+            const headerText = `🚀 **Quest Session Progress**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\`\n💰 **Total Orbs Earned:** \`${totalOrbsEarned} Orbs\``;
 
             const embed = new EmbedBuilder()
                 .setColor('#ff75a0')
