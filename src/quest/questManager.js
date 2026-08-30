@@ -123,7 +123,7 @@ export class QuestManager {
             questList.forEach((q) => {
                 const qName = q.config.messages.quest_name;
                 let rewardText = 'Orbs';
-                let orbAmount = 200; // Default amount per quest
+                let orbAmount = 240; // Image ke mutabik 240 Orbs
 
                 const rewards = q.config.rewards_config?.rewards;
                 if (rewards && rewards.length > 0) {
@@ -188,9 +188,10 @@ export class QuestManager {
         ) {
             let secondsDone = readProgress(quest, eventName, taskName);
 
+            // Agar progress zero se start ho rahi hai toh steps mein video progress bhejenge
             while (!quest.isCompleted() && secondsDone < secondsNeeded) {
                 try {
-                    secondsDone = Math.min(secondsNeeded, secondsDone + 15);
+                    secondsDone = Math.min(secondsNeeded, secondsDone + 10);
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: secondsDone,
                     });
@@ -203,11 +204,12 @@ export class QuestManager {
                         break;
                     }
                 } catch (err) {
-                    await this.#timeout(3000);
+                    await this.#timeout(2000);
                 }
-                await this.#timeout(3000);
+                await this.#timeout(2000);
             }
 
+            // Final safety trigger taaki quest 100% complete ho jaye
             try {
                 const finalRes = await this.client.post(`/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
                 if (finalRes) quest.updateUserStatus(extractStatus(finalRes));
@@ -268,7 +270,12 @@ function extractStatus(res) {
 function readProgress(quest, eventName, taskName) {
     const progress = quest.userStatus?.progress;
     if (!progress) return 0;
+    
+    // Alag-alag possible keys check karega taaki progress miss na ho
     const byEvent = eventName ? progress[eventName]?.value : undefined;
     const byTask  = progress[taskName]?.value;
-    return Number(byEvent ?? byTask ?? 0) || 0;
+    const genericWatch = progress['WATCH_VIDEO']?.value ?? progress['WATCH_VIDEO_EMBED']?.value;
+    
+    return Number(byEvent ?? byTask ?? genericWatch ?? 0) || 0;
 }
+
