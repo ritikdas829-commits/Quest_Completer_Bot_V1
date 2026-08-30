@@ -53,7 +53,7 @@ export class QuestManager {
         );
     }
 
-    async claimRewards(log = console.log) {
+    async claimRewards() {
         try {
             const fresh = await this.client.get('/quests/@me');
             for (const q of fresh.quests) {
@@ -66,22 +66,33 @@ export class QuestManager {
         let claimed = 0;
         for (const quest of claimable) {
             try {
-                await this.client.post(`/quests/${quest.id}/claim-reward`);
+                await this.client.post(`/quests/${quest.id}/claim-reward`, {
+                    location: 11,
+                    is_targeted: false,
+                    metadata_raw: null,
+                });
                 claimed++;
+                await this.#timeout(1500);
             } catch (err) {}
         }
         return claimed;
     }
 
     async acceptQuest(questId) {
-        const r = await this.client.post(`/quests/${questId}/enroll`, {
-            location: 11,
-            is_targeted: false,
-            metadata_raw: null,
-        });
-        const quest = this.get(questId);
-        quest?.updateUserStatus(extractStatus(r));
-        return quest;
+        try {
+            const r = await this.client.post(`/quests/${questId}/enroll`, {
+                location: 11,
+                is_targeted: false,
+                metadata_raw: null,
+            });
+            const quest = this.get(questId);
+            if (quest && r) {
+                quest.updateUserStatus(extractStatus(r));
+            }
+            return quest;
+        } catch (err) {
+            return null;
+        }
     }
 
     #timeout(ms) {
@@ -123,11 +134,11 @@ export class QuestManager {
                                `┗ 📌 **Status:** ${status}\n\n`;
             });
 
-            const headerText = `🚀 **Quest Session Complete**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\``;
+            const headerText = `🚀 **Quest Session Progress**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\``;
 
             const embed = new EmbedBuilder()
                 .setColor('#ff75a0')
-                .setTitle('✨ Coquettes Style Autoprogess')
+                .setTitle('✨ Coquettes Style Autoprogress v3')
                 .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
                 .setFooter({ text: 'Auto Runner • Multi-threaded' })
                 .setTimestamp();
@@ -140,15 +151,13 @@ export class QuestManager {
         } catch (err) {}
     }
 
-    async doingQuest(quest, log = console.log, channel = null, userId = null, allQuests = []) {
+    async doingQuest(quest, channel = null, userId = null, allQuests = []) {
         const questName = quest.config.messages.quest_name;
 
         if (!quest.isEnrolledQuest()) {
-            try {
-                await this.acceptQuest(quest.id);
-            } catch (err) {
-                return false;
-            }
+            const enrolled = await this.acceptQuest(quest.id);
+            if (!enrolled) return false;
+            await this.#timeout(1000);
         }
 
         const taskConfig = quest.config.task_config ?? quest.config.task_config_v2;
@@ -187,9 +196,9 @@ export class QuestManager {
                         break;
                     }
                 } catch (err) {
-                    await this.#timeout(2000);
+                    await this.#timeout(3000);
                 }
-                await this.#timeout(2000);
+                await this.#timeout(3000);
             }
 
             try {
@@ -208,32 +217,32 @@ export class QuestManager {
 
                 try {
                     const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
-                    quest.updateUserStatus(extractStatus(res));
+                    if (res) quest.updateUserStatus(extractStatus(res));
                 } catch (err) {
-                    await this.#timeout(3000);
+                    await this.#timeout(5000);
                     continue;
                 }
 
                 const done = readProgress(quest, eventName, taskName);
                 if (done >= secondsNeeded || quest.isCompleted()) break;
                 
-                await this.#timeout(5000);
+                await this.#timeout(6000);
             }
 
             try {
                 const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: true });
-                quest.updateUserStatus(extractStatus(res));
+                if (res) quest.updateUserStatus(extractStatus(res));
             } catch {}
         }
 
-        // Background session box update (non-blocking)
+        // Update UI session box
         QuestManager.updateSessionBox(channel, allQuests);
 
         if (userId) {
             try {
                 const user = await this.client.users.fetch(userId);
                 if (user) {
-                    await user.send(`✨ **${questName}**\n↳ 200 Orbs\n✓ done`);
+                    await user.send(`✨ **${questName}**\n↳ Reward Completed\n✓ done`);
                 }
             } catch (dmErr) {}
         }
@@ -256,4 +265,3 @@ function readProgress(quest, eventName, taskName) {
     const byTask  = progress[taskName]?.value;
     return Number(byEvent ?? byTask ?? 0) || 0;
 }
-
