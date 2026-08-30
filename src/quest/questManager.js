@@ -123,7 +123,7 @@ export class QuestManager {
             questList.forEach((q) => {
                 const qName = q.config.messages.quest_name;
                 let rewardText = 'Orbs';
-                let orbAmount = 240; // Image ke mutabik 240 Orbs
+                let orbAmount = 200;
 
                 const rewards = q.config.rewards_config?.rewards;
                 if (rewards && rewards.length > 0) {
@@ -186,34 +186,33 @@ export class QuestManager {
             taskName === 'LEARN_MORE' ||
             taskName === 'WATCH_VIDEO_EMBED'
         ) {
-            let secondsDone = readProgress(quest, eventName, taskName);
+            // Seedha target timestamp bhej kar video turant complete karne ki koshish karein
+            try {
+                const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
+                    timestamp: secondsNeeded,
+                });
+                if (res) {
+                    quest.updateUserStatus(extractStatus(res));
+                }
+            } catch (err) {}
 
-            // Agar progress zero se start ho rahi hai toh steps mein video progress bhejenge
+            await this.#refreshQuestStatus(quest);
+
+            // Agar phir bhi complete na ho toh progressive steps bhejein
+            let secondsDone = readProgress(quest, eventName, taskName);
             while (!quest.isCompleted() && secondsDone < secondsNeeded) {
                 try {
-                    secondsDone = Math.min(secondsNeeded, secondsDone + 10);
+                    secondsDone = Math.min(secondsNeeded, secondsDone + 15);
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: secondsDone,
                     });
-                    
-                    if (res?.user_status) {
+                    if (res) {
                         quest.updateUserStatus(extractStatus(res));
                     }
-                    
-                    if (res?.completed_at || res?.user_status?.completed_at || quest.isCompleted()) {
-                        break;
-                    }
-                } catch (err) {
-                    await this.#timeout(2000);
-                }
-                await this.#timeout(2000);
+                    if (quest.isCompleted()) break;
+                } catch (err) {}
+                await this.#timeout(1500);
             }
-
-            // Final safety trigger taaki quest 100% complete ho jaye
-            try {
-                const finalRes = await this.client.post(`/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
-                if (finalRes) quest.updateUserStatus(extractStatus(finalRes));
-            } catch {}
 
             await this.#refreshQuestStatus(quest);
 
@@ -228,14 +227,14 @@ export class QuestManager {
                     const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
                     if (res) quest.updateUserStatus(extractStatus(res));
                 } catch (err) {
-                    await this.#timeout(5000);
+                    await this.#timeout(3000);
                     continue;
                 }
 
                 const done = readProgress(quest, eventName, taskName);
                 if (done >= secondsNeeded || quest.isCompleted()) break;
                 
-                await this.#timeout(6000);
+                await this.#timeout(4000);
             }
 
             try {
@@ -244,10 +243,11 @@ export class QuestManager {
             } catch {}
         }
 
-        // Update UI session box
+        // Live status update channel par turant bhejne ke liye
         QuestManager.updateSessionBox(channel, allQuests);
 
-        if (userId) {
+        // Agar quest complete ho gaya hai toh DM bhejein
+        if (userId && quest.isCompleted()) {
             try {
                 const user = await this.client.users.fetch(userId);
                 if (user) {
@@ -270,12 +270,8 @@ function extractStatus(res) {
 function readProgress(quest, eventName, taskName) {
     const progress = quest.userStatus?.progress;
     if (!progress) return 0;
-    
-    // Alag-alag possible keys check karega taaki progress miss na ho
     const byEvent = eventName ? progress[eventName]?.value : undefined;
     const byTask  = progress[taskName]?.value;
     const genericWatch = progress['WATCH_VIDEO']?.value ?? progress['WATCH_VIDEO_EMBED']?.value;
-    
     return Number(byEvent ?? byTask ?? genericWatch ?? 0) || 0;
 }
-
