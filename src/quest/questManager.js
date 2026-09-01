@@ -151,7 +151,9 @@ export class QuestManager {
                 .setTimestamp();
 
             if (QuestManager.activeSessionMessage) {
-                await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(() => {});
+                await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(async () => {
+                    QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+                });
             } else {
                 QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
             }
@@ -179,74 +181,88 @@ export class QuestManager {
         const secondsNeeded = task.target || 30;
         const eventName = task.event_name ?? task.type ?? taskName;
 
-        if (
-            taskName === 'WATCH_VIDEO' || 
-            taskName === 'WATCH_VIDEO_ON_MOBILE' || 
-            taskName === 'WATCH_VIDEO_BY_STREAM' || 
-            taskName === 'LEARN_MORE' ||
-            taskName === 'WATCH_VIDEO_EMBED'
-        ) {
-            // Seedha target timestamp bhej kar video turant complete karne ki koshish karein
-            try {
-                const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
-                    timestamp: secondsNeeded,
-                });
-                if (res) {
-                    quest.updateUserStatus(extractStatus(res));
-                }
-            } catch (err) {}
-
+        // Har 20 seconds mein status refresh aur session box edit karne ke liye interval loop
+        const intervalTimer = setInterval(async () => {
             await this.#refreshQuestStatus(quest);
+            if (channel && allQuests.length > 0) {
+                QuestManager.updateSessionBox(channel, allQuests);
+            }
+        }, 20000);
 
-            // Agar phir bhi complete na ho toh progressive steps bhejein
-            let secondsDone = readProgress(quest, eventName, taskName);
-            while (!quest.isCompleted() && secondsDone < secondsNeeded) {
+        try {
+            if (
+                taskName === 'WATCH_VIDEO' || 
+                taskName === 'WATCH_VIDEO_ON_MOBILE' || 
+                taskName === 'WATCH_VIDEO_BY_STREAM' || 
+                taskName === 'LEARN_MORE' ||
+                taskName === 'WATCH_VIDEO_EMBED'
+            ) {
                 try {
-                    secondsDone = Math.min(secondsNeeded, secondsDone + 15);
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
-                        timestamp: secondsDone,
+                        timestamp: secondsNeeded,
                     });
                     if (res) {
                         quest.updateUserStatus(extractStatus(res));
                     }
-                    if (quest.isCompleted()) break;
                 } catch (err) {}
-                await this.#timeout(1500);
-            }
 
-            await this.#refreshQuestStatus(quest);
+                await this.#refreshQuestStatus(quest);
+                if (channel) QuestManager.updateSessionBox(channel, allQuests);
 
-        } else if (taskName === 'PLAY_ON_DESKTOP' || taskName === 'STREAM_ON_DESKTOP') {
-            const maxDurationMs = (secondsNeeded + 300) * 1000;
-            const startTime = Date.now();
-
-            while (!quest.isCompleted()) {
-                if (Date.now() - startTime > maxDurationMs) break;
-
-                try {
-                    const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
-                    if (res) quest.updateUserStatus(extractStatus(res));
-                } catch (err) {
-                    await this.#timeout(3000);
-                    continue;
+                let secondsDone = readProgress(quest, eventName, taskName);
+                while (!quest.isCompleted() && secondsDone < secondsNeeded) {
+                    try {
+                        secondsDone = Math.min(secondsNeeded, secondsDone + 15);
+                        const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
+                            timestamp: secondsDone,
+                        });
+                        if (res) {
+                            quest.updateUserStatus(extractStatus(res));
+                        }
+                        if (channel) QuestManager.updateSessionBox(channel, allQuests);
+                        if (quest.isCompleted()) break;
+                    } catch (err) {}
+                    await this.#timeout(1500);
                 }
 
-                const done = readProgress(quest, eventName, taskName);
-                if (done >= secondsNeeded || quest.isCompleted()) break;
-                
-                await this.#timeout(4000);
-            }
+                await this.#refreshQuestStatus(quest);
 
-            try {
-                const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: true });
-                if (res) quest.updateUserStatus(extractStatus(res));
-            } catch {}
+            } else if (taskName === 'PLAY_ON_DESKTOP' || taskName === 'STREAM_ON_DESKTOP') {
+                const maxDurationMs = (secondsNeeded + 300) * 1000;
+                const startTime = Date.now();
+
+                while (!quest.isCompleted()) {
+                    if (Date.now() - startTime > maxDurationMs) break;
+
+                    try {
+                        const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
+                        if (res) quest.updateUserStatus(extractStatus(res));
+                    } catch (err) {
+                        await this.#timeout(3000);
+                        continue;
+                    }
+
+                    if (channel) QuestManager.updateSessionBox(channel, allQuests);
+
+                    const done = readProgress(quest, eventName, taskName);
+                    if (done >= secondsNeeded || quest.isCompleted()) break;
+                    
+                    await this.#timeout(4000);
+                }
+
+                try {
+                    const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: true });
+                    if (res) quest.updateUserStatus(extractStatus(res));
+                } catch {}
+            }
+        } finally {
+            clearInterval(intervalTimer);
         }
 
-        // Live status update channel par turant bhejne ke liye
-        QuestManager.updateSessionBox(channel, allQuests);
+        if (channel) {
+            QuestManager.updateSessionBox(channel, allQuests);
+        }
 
-        // Agar quest complete ho gaya hai toh DM bhejein
         if (userId && quest.isCompleted()) {
             try {
                 const user = await this.client.users.fetch(userId);
