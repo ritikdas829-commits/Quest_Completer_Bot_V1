@@ -77,7 +77,6 @@ export class QuestManager {
                 }
                 await this.#timeout(1500);
             } catch (err) {
-                // Agar koi ek quest claim hone mein error de, toh loop aage ki quests ke liye chalta rahega
                 continue;
             }
         }
@@ -141,20 +140,25 @@ export class QuestManager {
                     totalOrbsEarned += orbAmount;
                 }
 
-                let status = q.isCompleted() ? '✨ done' : '⚡ running';
+                // Stylish Status indicators with visual mini progress bar feel
+                let status = q.isCompleted() ? '✨ **[COMPLETED]**' : '⚡ **[IN PROGRESS]**';
 
                 description += `🔹 **${qName}**\n` +
-                               `┗ 🎁 **Reward:** ${rewardText}\n` +
+                               `┣ 🎁 **Reward:** \`${rewardText}\`\n` +
                                `┗ 📌 **Status:** ${status}\n\n`;
             });
 
-            const headerText = `🚀 **Quest Session Progress**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\`\n💰 **Total Orbs Earned:** \`${totalOrbsEarned} Orbs\``;
+            // Modern Header Style
+            const headerText = `╭━━━ 🚀 **LIVE QUEST RUNNER V3** ━━━╮\n` +
+                               `📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\`\n` +
+                               `💰 **Total Orbs:** \`${totalOrbsEarned} Orbs\`\n` +
+                               `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
             const embed = new EmbedBuilder()
-                .setColor(completedCount === totalQuests ? '#57F287' : '#ff75a0')
-                .setTitle('✨ Coquettes Style Autoprogress v3')
-                .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
-                .setFooter({ text: 'Auto Runner • Multi-threaded' })
+                .setColor(completedCount === totalQuests ? '#57F287' : '#9b59b6')
+                .setTitle('✨ Coquettes Style Autoprogress Dashboard')
+                .setDescription(`${headerText}\n\n${description.trim()}`)
+                .setFooter({ text: 'Auto Runner • Smart Multi-Detection Active' })
                 .setTimestamp();
 
             if (QuestManager.activeSessionMessage) {
@@ -180,13 +184,15 @@ export class QuestManager {
         if (!taskConfig) return false;
 
         const tasks = taskConfig.tasks ?? {};
-        const TASK_TYPES = Object.values(QuestTaskConfigType);
-        const taskName = TASK_TYPES.find((x) => tasks[x] != null);
-        if (!taskName) return false;
+        
+        // --- DYNAMIC AUTO-DETECTION FOR NEW & OLD QUESTS ---
+        const availableTaskTypes = Object.keys(tasks);
+        if (availableTaskTypes.length === 0) return false;
 
+        const taskName = availableTaskTypes[0];
         const task = tasks[taskName];
-        const secondsNeeded = task.target || 30;
-        const eventName = task.event_name ?? task.type ?? taskName;
+        const secondsNeeded = task?.target || 30;
+        const eventName = task?.event_name ?? task?.type ?? taskName;
 
         const intervalTimer = setInterval(async () => {
             await this.#refreshQuestStatus(quest);
@@ -196,56 +202,49 @@ export class QuestManager {
         }, 20000);
 
         try {
+            // Smart check for video or any new watch-type tasks automatically
             if (
-                taskName === 'WATCH_VIDEO' || 
-                taskName === 'WATCH_VIDEO_ON_MOBILE' || 
-                taskName === 'WATCH_VIDEO_BY_STREAM' || 
-                taskName === 'LEARN_MORE' ||
+                taskName.includes('WATCH') || 
+                taskName.includes('VIDEO') || 
+                taskName.includes('LEARN') || 
                 taskName === 'WATCH_VIDEO_EMBED'
             ) {
-                const currentTaskId = Object.keys(tasks).find(k => k === taskName) || taskName;
-
-                try {
-                    const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
-                        timestamp: secondsNeeded,
-                        task_id: currentTaskId,
-                    });
-                    if (res) {
-                        quest.updateUserStatus(extractStatus(res));
-                    }
-                } catch (err) {
-                    try {
-                        await this.client.post(`/quests/${quest.id}/video-progress`, {
-                            timestamp: secondsNeeded,
-                            event_name: eventName,
-                            task_id: currentTaskId,
-                        });
-                    } catch {}
-                }
-
-                await this.#refreshQuestStatus(quest);
-                if (channel) QuestManager.updateSessionBox(channel, allQuests);
-
+                const currentTaskId = taskName;
                 let secondsDone = readProgress(quest, eventName, taskName);
-                while (!quest.isCompleted() && secondsDone < secondsNeeded) {
+                const targetSecs = secondsNeeded > 0 ? secondsNeeded : 30;
+
+                while (!quest.isCompleted() && secondsDone <= targetSecs) {
                     try {
-                        secondsDone = Math.min(secondsNeeded, secondsDone + secondsNeeded);
-                        const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
+                        const payload = {
                             timestamp: secondsDone,
                             task_id: currentTaskId,
-                        });
-                        if (res) {
-                            quest.updateUserStatus(extractStatus(res));
-                        }
+                        };
+                        if (eventName) payload.event_name = eventName;
+
+                        const res = await this.client.post(`/quests/${quest.id}/video-progress`, payload);
+                        if (res) quest.updateUserStatus(extractStatus(res));
+
                         if (channel) QuestManager.updateSessionBox(channel, allQuests);
                         if (quest.isCompleted()) break;
+
+                        secondsDone += Math.min(10, Math.max(5, Math.floor(targetSecs / 4)));
+                        if (secondsDone > targetSecs) secondsDone = targetSecs;
                     } catch (err) {}
-                    await this.#timeout(1500);
+                    await this.#timeout(2000);
                 }
+
+                try {
+                    const finalRes = await this.client.post(`/quests/${quest.id}/video-progress`, {
+                        timestamp: targetSecs,
+                        task_id: currentTaskId,
+                    });
+                    if (finalRes) quest.updateUserStatus(extractStatus(finalRes));
+                } catch {}
 
                 await this.#refreshQuestStatus(quest);
 
-            } else if (taskName === 'PLAY_ON_DESKTOP' || taskName === 'STREAM_ON_DESKTOP') {
+            } else {
+                // Desktop play or stream or any alternative modern task types
                 const maxDurationMs = (secondsNeeded + 300) * 1000;
                 const startTime = Date.now();
 
