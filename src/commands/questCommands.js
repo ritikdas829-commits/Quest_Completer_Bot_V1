@@ -27,9 +27,7 @@ export function makeTokenStore(secret) {
 }
 
 function checkUserAccess(member, interactionOrMessage) {
-    // Agar server (guild) nahi hai matlab yeh Direct Message (DM) hai, toh turant false (block) kar do
     if (interactionOrMessage && !interactionOrMessage.guild) return false;
-
     if (!member) return true;
     
     try {
@@ -41,14 +39,11 @@ function checkUserAccess(member, interactionOrMessage) {
     const userId = member.id || member.author?.id;
     if (!userId) return false;
 
-    // Check if user has boosted the server (Discord native boost or custom boost role)
     const isBooster = member.premiumSince !== null || member.roles?.premiumSubscriberRole;
     const customBoostRole = member.guild?.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
     const hasCustomBoostRole = customBoostRole && member.roles?.cache.has(customBoostRole.id);
-
     const targetRole = member.guild?.roles.cache.find(r => r.name === 'Quest Access');
 
-    // Agar user booster hai, toh direct access do aur role bhi assign kar do!
     if (isBooster || hasCustomBoostRole) {
         if (targetRole && member.roles && !member.roles.cache.has(targetRole.id)) {
             member.roles.add(targetRole).catch(() => {});
@@ -72,9 +67,7 @@ function checkUserAccess(member, interactionOrMessage) {
                 return member.roles.cache.some(role => role.name === 'Quest Access');
             }
             if (userInvites >= 2) return true;
-        } catch (err) {
-            console.error('Database check error:', err);
-        }
+        } catch (err) {}
     }
 
     return member.roles?.cache?.some(role => role.name === 'Quest Access') || false;
@@ -82,7 +75,6 @@ function checkUserAccess(member, interactionOrMessage) {
 
 async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     const isDM = interactionOrMessage && !interactionOrMessage.guild;
-    
     const c = new ContainerBuilder().setAccentColor(0xED4245);
     
     if (isDM) {
@@ -94,7 +86,6 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     } else {
         const member = interactionOrMessage.member;
         const userId = member ? member.id : interactionOrMessage.author.id;
-        
         let currentInvites = 0;
         const dbPath = path.resolve('./invitesData.json');
         if (fs.existsSync(dbPath)) {
@@ -105,8 +96,6 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
         }
 
         const progressText = `${Math.min(currentInvites, 2)}/2`;
-        
-        // Naya aur professional Access Denied message
         c.addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
                 `❌ **Access Denied**\n\n` +
@@ -134,9 +123,7 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
         if (interactionOrMessage.channel && typeof interactionOrMessage.channel.send === 'function') {
             await interactionOrMessage.channel.send(payload);
         }
-    } catch (err) {
-        console.error('Failed to send access denied message:', err);
-    }
+    } catch {}
 }
 
 function sanitizeToken(raw) {
@@ -186,7 +173,6 @@ function buildLinkPrompt() {
             `# ✨ Token Copy Guide\nSelect your platform below to view the script:`,
         ),
     );
-    
     c2.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
     c2.addActionRowComponents(
         new ActionRowBuilder().addComponents(
@@ -231,7 +217,7 @@ function buildErrorCard(err) {
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
 
-async function runQuestAll(userId, tokenStore, channel, send) {
+async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
     const token = tokenStore.get(userId);
     if (!token) { await send(buildLinkPrompt()); return false; }
 
@@ -242,13 +228,33 @@ async function runQuestAll(userId, tokenStore, channel, send) {
         if (valid.length === 0) { await send(buildNoQuestsCard()); return false; }
 
         QuestManager.activeSessionMessage = null;
-        await QuestManager.updateSessionBox(channel, valid, null, '⏳ waiting');
+        await QuestManager.updateSessionBox(channel, valid);
 
         await Promise.all(
-            valid.map((quest) => manager.doingQuest(quest, console.log, channel, userId, valid))
+            valid.map((quest) => manager.doingQuest(quest, channel, userId, valid))
         );
 
         await manager.claimRewards(console.log).catch(() => 0);
+
+        // Quest complete hone par user ko DM bhejne ka feature
+        if (discordClient) {
+            for (const quest of valid) {
+                if (quest.isCompleted()) {
+                    try {
+                        const user = await discordClient.users.fetch(userId);
+                        const dm = await user.createDM();
+                        const c = new ContainerBuilder().setAccentColor(0x57F287);
+                        c.addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(
+                                `# ✨ Quest Complete!\n**${quest.config.messages.quest_name}** has been completed successfully.\n✓ Reward collected!`
+                            ),
+                        );
+                        await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 });
+                    } catch (dmErr) {}
+                }
+            }
+        }
+
         return true;
 
     } catch (err) {
@@ -263,8 +269,8 @@ async function runQuestAll(userId, tokenStore, channel, send) {
     }
 }
 
-async function runQuestOne(userId, tokenStore, channel, send) {
-    return runQuestAll(userId, tokenStore, channel, send);
+async function runQuestOne(userId, tokenStore, channel, send, discordClient) {
+    return runQuestAll(userId, tokenStore, channel, send, discordClient);
 }
 
 async function runQuestList(userId, tokenStore, send) {
@@ -283,6 +289,8 @@ async function runQuestList(userId, tokenStore, send) {
             STREAM_ON_DESKTOP:     { icon: '📺', label: 'Stream on Desktop' },
             PLAY_ACTIVITY:         { icon: '🎮', label: 'Play Activity' },
             WATCH_VIDEO_ON_MOBILE: { icon: '📱', label: 'Watch Video on Mobile' },
+            LEARN_MORE:            { icon: '💡', label: 'Learn More' },
+            WATCH_VIDEO_EMBED:     { icon: '🎬', label: 'Watch Video Embed' },
         };
 
         for (const q of all.slice(0, 10)) {
@@ -302,7 +310,7 @@ async function runQuestList(userId, tokenStore, send) {
                 const meta = TASK_META[type] ?? { icon: '⚙️', label: type };
                 let dur = '';
                 if (type === 'PLAY_ON_DESKTOP' || type === 'STREAM_ON_DESKTOP') dur = `  •  **${Math.ceil(task.target / 60)} min**`;
-                else if (type === 'WATCH_VIDEO' || type === 'WATCH_VIDEO_ON_MOBILE') {
+                else {
                     const s = task.target;
                     dur = s >= 60 ? `  •  **${Math.ceil(s / 60)} min**` : `  •  **${s}s**`;
                 }
@@ -399,11 +407,11 @@ export const questCmd = {
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply();
-        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts));
+        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client);
     },
     async prefixExecute(message, _args, client) {
         if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
-        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts));
+        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), client);
     },
 };
 
@@ -413,11 +421,11 @@ export const questAllCmd = {
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply();
-        await runQuestAll(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts));
+        await runQuestAll(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client);
     },
     async prefixExecute(message, _args, client) {
         if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
-        await runQuestAll(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts));
+        await runQuestAll(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), client);
     },
 };
 
@@ -578,7 +586,7 @@ export async function handlePlatformButton(interaction) {
 
     if (customId === 'btn_android') {
         const androidScript = `javascript:(function(){try{let f=document.createElement('iframe');document.body.appendChild(f);let t=JSON.parse(f.contentWindow.localStorage.token);let ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();let n=document.createElement('div');n.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';n.style.cssText='position:fixed;top:20px;left:20px;background:#001f3f;color:#7FDBFF;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;z-index:99999;opacity:0;transition:opacity 0.3s ease-in-out;';document.body.appendChild(n);setTimeout(()=>n.style.opacity='1',50);setTimeout(()=>n.style.opacity='0',3500);setTimeout(()=>n.remove(),4000);}catch(e){alert('Error copying token');}})();`;
-        const androidVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4?ex=6a90641c&is=6a8f129c&hm=7bc7af1c82a00cf864ba23c209b174b031cc95e4ae9851d2b64bd4387fd0f212&';
+        const androidVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4';
 
         await interaction.reply({
             content: `### 📌 How to use\n\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
@@ -589,7 +597,7 @@ export async function handlePlatformButton(interaction) {
 
     if (customId === 'btn_ios') {
         const iosScript = `javascript:(function(){try{var i=document.createElement('iframe');document.body.appendChild(i);var t=JSON.parse(i.contentWindow.localStorage.token.replace(/^"(.*)"$/, '$1'));navigator.clipboard.writeText(t).then(function(){var d=document.createElement('div');d.innerHTML='<strong>Token Copied</strong><br>Your token has been copied to clipboard';Object.assign(d.style,{position:'fixed',top:'10px',left:'10px',background:'#d4edda',color:'#155724',padding:'10px',border:'1px solid #c3e6cb',borderRadius:'5px',zIndex:99999,fontFamily:'sans-serif'});document.body.appendChild(d);setTimeout(()=>d.remove(),3000);});}catch(e){alert('Failed to copy token: '+e);}})();`;
-        const iosVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4?ex=6a90641c&is=6a8f129c&hm=7bc7af1c82a00cf864ba23c209b174b031cc95e4ae9851d2b64bd4387fd0f212&';
+        const iosVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4';
 
         await interaction.reply({
             content: `### 📌 How to use\n\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
@@ -617,7 +625,7 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         }
         if (live.isCompleted() || live.isExpired()) return;
 
-        await manager.doingQuest(live, log);
+        await manager.doingQuest(live, null, userId, [live]);
         let claimManager = manager;
         try { claimManager = await qc.fetchQuests(); } catch {}
         const claimed = await claimManager.claimRewards(log).catch(() => 0);
@@ -637,4 +645,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
-
