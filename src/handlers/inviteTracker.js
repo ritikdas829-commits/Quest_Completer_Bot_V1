@@ -3,7 +3,6 @@ import path from 'path';
 
 const dbPath = path.resolve('./invitesData.json');
 
-// Load or initialize invite database safely
 let inviteData = {};
 try {
     if (fs.existsSync(dbPath)) {
@@ -35,7 +34,7 @@ export async function cacheGuildInvites(client) {
     });
 }
 
-// Handle member join & track real invites with 14-day rejoin protection
+// Handle member join & track real invites safely
 export async function handleInviteJoin(member) {
     if (!member || member.user.bot) return;
 
@@ -55,23 +54,16 @@ export async function handleInviteJoin(member) {
             }
         }
 
-        // Update cache immediately with new uses
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
         if (usedInvite && usedInvite.inviter) {
             const inviter = usedInvite.inviter;
 
-            // Prevent self-invites
             if (inviter.id === member.user.id) return;
 
-            // Anti-Alt Filter: Ignore accounts younger than 7 days
             const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
-            if (accountAgeDays < 7) {
-                console.log(`[Anti-Alt] Ignored fake/new account: ${member.user.tag}`);
-                return;
-            }
+            if (accountAgeDays < 7) return;
 
-            // Database structure initializations
             if (!inviteData[inviter.id]) {
                 inviteData[inviter.id] = { count: 0, invitedUsers: [], leaveHistory: {} };
             }
@@ -79,7 +71,6 @@ export async function handleInviteJoin(member) {
                 inviteData[inviter.id].leaveHistory = {};
             }
 
-            // 14-Day Rejoin Cooldown Check
             const now = Date.now();
             const fourteenDaysInMs = 14 * 24 * 60 * 60 * 1000;
             const lastLeftTime = inviteData[inviter.id].leaveHistory[member.id] || 0;
@@ -87,12 +78,8 @@ export async function handleInviteJoin(member) {
             const isRecentRejoin = (now - lastLeftTime) < fourteenDaysInMs;
             const isAlreadyInvited = inviteData[inviter.id].invitedUsers.includes(member.id);
 
-            if (isAlreadyInvited || isRecentRejoin) {
-                console.log(`[Anti-Rejoin] Ignored rejoin exploit for user ${member.user.tag} under inviter ${inviter.tag}`);
-                return; 
-            }
+            if (isAlreadyInvited || isRecentRejoin) return; 
 
-            // Add to active invited users and update count based on array length
             inviteData[inviter.id].invitedUsers.push(member.id);
             inviteData[inviter.id].count = inviteData[inviter.id].invitedUsers.length;
             saveDB();
@@ -100,11 +87,10 @@ export async function handleInviteJoin(member) {
             const currentCount = inviteData[inviter.id].count;
             const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
 
-            // Give access if count reaches 2 or more
             if (currentCount >= 2 && targetRole) {
                 const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
                 if (inviterMember && !inviterMember.roles.cache.has(targetRole.id)) {
-                    await inviterMember.roles.add(targetRole).catch(err => console.error("Role assign error:", err));
+                    await inviterMember.roles.add(targetRole).catch(() => {});
                     try {
                         await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and your Quest Access has been unlocked.`);
                     } catch {}
@@ -116,7 +102,7 @@ export async function handleInviteJoin(member) {
     }
 }
 
-// Handle member leave (Role removes only if active count drops strictly below 2)
+// Handle member leave safely with accurate verification
 export async function handleInviteLeave(member) {
     if (!member || member.user.bot) return;
     const guild = member.guild;
@@ -125,7 +111,7 @@ export async function handleInviteLeave(member) {
         const newInvites = await guild.invites.fetch();
         invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
     } catch (err) {
-        console.error(`Failed to update invites cache on leave for guild ${guild.name}:`, err);
+        console.error(`Failed to update invites cache on leave:`, err);
     }
 
     for (const inviterId in inviteData) {
@@ -135,11 +121,8 @@ export async function handleInviteLeave(member) {
             const index = data.invitedUsers.indexOf(member.id);
             if (index !== -1) {
                 data.invitedUsers.splice(index, 1);
-                
-                // Count accurately syncs with remaining active users length
                 data.count = data.invitedUsers.length;
                 
-                // Track when this user left to enforce the 14-day rejoin block
                 if (!data.leaveHistory) data.leaveHistory = {};
                 data.leaveHistory[member.id] = Date.now();
 
@@ -149,10 +132,9 @@ export async function handleInviteLeave(member) {
                 if (targetRole) {
                     const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
                     
-                    // Role will only be removed if active count drops strictly below 2 (e.g., 1 or 0)
                     if (inviterMember && data.count < 2) {
                         if (inviterMember.roles.cache.has(targetRole.id)) {
-                            await inviterMember.roles.remove(targetRole).catch(err => console.error("Role remove error:", err));
+                            await inviterMember.roles.remove(targetRole).catch(() => {});
                             try {
                                 await inviterMember.send(`⚠️ One of your invited members left the server. Your active invite count dropped below 2, so your Quest Access has been locked.`);
                             } catch {}
@@ -165,7 +147,7 @@ export async function handleInviteLeave(member) {
     }
 }
 
-// Check command access with Server Booster support & 2 Invites rule
+// Check command access & auto-correct role if count is valid
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
@@ -173,14 +155,12 @@ export async function checkCommandAccess(user, member) {
         return { allowed: true };
     }
 
-    // Check if the user has boosted the server
     const isBooster = member.premiumSince !== null || member.roles.premiumSubscriberRole;
     const customBoostRole = member.guild.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
     const hasCustomBoostRole = customBoostRole && member.roles.cache.has(customBoostRole.id);
 
     const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
 
-    // If user boosted the server, grant direct access!
     if (isBooster || hasCustomBoostRole) {
         if (targetRole && !member.roles.cache.has(targetRole.id)) {
             await member.roles.add(targetRole).catch(() => {});
@@ -188,7 +168,6 @@ export async function checkCommandAccess(user, member) {
         return { allowed: true };
     }
 
-    // Normal Invite Check
     const currentCount = inviteData[user.id]?.count || 0;
 
     if (currentCount >= 2) {
@@ -210,7 +189,8 @@ export async function checkCommandAccess(user, member) {
                  `You need **Quest Access** to run quest commands on this server.\n\n` +
                  `📊 **Your Invites Progress:** \`${progressText} invites completed\`\n\n` +
                  `✨ **How to get access instantly:**\n` +
-                 `• Invite **2 friends** to the server *(Automatically unlocks when complete!)*\n` +
-                 `• **Boost the Server** *(Gives instant access while your boost is active!)*` 
+                 `• Invite **2 friends** to the server\n` +
+                 `• **Boost the Server**` 
     };
 }
+
