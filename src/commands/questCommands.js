@@ -112,16 +112,16 @@ async function sendAccessDenied(interactionOrMessage, isEphemeral = true) {
     try {
         if (interactionOrMessage.reply && typeof interactionOrMessage.reply === 'function') {
             if (!interactionOrMessage.deferred && !interactionOrMessage.replied) {
-                await interactionOrMessage.reply(payload);
+                await interactionOrMessage.reply(payload).catch(() => {});
                 return;
             }
         }
         if (interactionOrMessage.followUp && typeof interactionOrMessage.followUp === 'function') {
-            await interactionOrMessage.followUp(payload);
+            await interactionOrMessage.followUp(payload).catch(() => {});
             return;
         }
         if (interactionOrMessage.channel && typeof interactionOrMessage.channel.send === 'function') {
-            await interactionOrMessage.channel.send(payload);
+            await interactionOrMessage.channel.send(payload).catch(() => {});
         }
     } catch {}
 }
@@ -219,13 +219,13 @@ function buildErrorCard(err) {
 
 async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
     const token = tokenStore.get(userId);
-    if (!token) { await send(buildLinkPrompt()); return false; }
+    if (!token) { await send(buildLinkPrompt()).catch(() => {}); return false; }
 
     const qc = new QuestClient(token);
     try {
         const manager = await qc.fetchQuests();
         const valid = manager.filterQuestsValid();
-        if (valid.length === 0) { await send(buildNoQuestsCard()); return false; }
+        if (valid.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return false; }
 
         QuestManager.activeSessionMessage = null;
         await QuestManager.updateSessionBox(channel, valid);
@@ -236,7 +236,6 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
 
         await manager.claimRewards(console.log).catch(() => 0);
 
-        // Quest complete hone par user ko DM bhejne ka feature
         if (discordClient) {
             for (const quest of valid) {
                 if (quest.isCompleted()) {
@@ -249,7 +248,7 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
                                 `# ✨ Quest Complete!\n**${quest.config.messages.quest_name}** has been completed successfully.\n✓ Reward collected!`
                             ),
                         );
-                        await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 });
+                        await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
                     } catch (dmErr) {}
                 }
             }
@@ -275,13 +274,13 @@ async function runQuestOne(userId, tokenStore, channel, send, discordClient) {
 
 async function runQuestList(userId, tokenStore, send) {
     const token = tokenStore.get(userId);
-    if (!token) { await send(buildLinkPrompt()); return; }
+    if (!token) { await send(buildLinkPrompt()).catch(() => {}); return; }
 
     const qc = new QuestClient(token);
     try {
         const manager = await qc.fetchQuests();
         const all = manager.list();
-        if (all.length === 0) { await send(buildNoQuestsCard()); return; }
+        if (all.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return; }
 
         const TASK_META = {
             PLAY_ON_DESKTOP:       { icon: '🖥️', label: 'Play on Desktop' },
@@ -341,7 +340,7 @@ async function runQuestList(userId, tokenStore, send) {
                     `🎁 **Reward**\n${rewardLines.join('\n') || '*No rewards listed*'}`,
                 ),
             );
-            await send({ components: [c], flags: MessageFlags.IsComponentsV2 });
+            await send({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         }
     } catch (err) {
         await send(buildErrorCard(err)).catch(() => {});
@@ -353,7 +352,7 @@ async function runTokenCheck(userId, tokenStore, replyFn) {
     if (!token) {
         const c = new ContainerBuilder().setAccentColor(0xFEE75C);
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# No Token Saved\nYou don't have a saved token. Use \`${PREFIX}link\` to save one.`));
-        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 });
+        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         return;
     }
 
@@ -373,7 +372,7 @@ async function runTokenCheck(userId, tokenStore, replyFn) {
             valid ? `# ✅ Token is Valid\nLinked as **"${accountName}"**.` : `# ❌ Token Invalid or Expired\nUse \`${PREFIX}unlink\` then \`${PREFIX}link\` to save a fresh token.`,
         ),
     );
-    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 });
+    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
     if (!valid) tokenStore.remove(userId);
 }
 
@@ -382,13 +381,13 @@ async function runAutoquestToggle(userId, tokenStore, replyFn) {
         disableAutoquest(userId);
         const c = new ContainerBuilder().setAccentColor(0xFEE75C);
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🤖 Auto-Quest Disabled\nI'll no longer auto-run new quests for you.`));
-        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 });
+        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         return;
     }
     if (!tokenStore.has(userId)) {
         const c = new ContainerBuilder().setAccentColor(0xED4245);
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ❌ No Saved Token\nUse \`${PREFIX}link\` first.`));
-        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 });
+        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         return;
     }
     enableAutoquest(userId);
@@ -398,7 +397,7 @@ async function runAutoquestToggle(userId, tokenStore, replyFn) {
             `# 🤖 Auto-Quest Enabled!\nEvery new Discord quest will be auto-completed for you in the background.`,
         ),
     );
-    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 });
+    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
 }
 
 export const questCmd = {
@@ -406,7 +405,7 @@ export const questCmd = {
     prefix: 'quest',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
-        await interaction.deferReply();
+        await interaction.deferReply().catch(() => {});
         await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client);
     },
     async prefixExecute(message, _args, client) {
@@ -420,7 +419,7 @@ export const questAllCmd = {
     prefix: 'q',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
-        await interaction.deferReply();
+        await interaction.deferReply().catch(() => {});
         await runQuestAll(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client);
     },
     async prefixExecute(message, _args, client) {
@@ -434,7 +433,7 @@ export const questListCmd = {
     prefix: 'questlist',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
-        await interaction.deferReply();
+        await interaction.deferReply().catch(() => {});
         await runQuestList(interaction.user.id, client.tokenStore, (opts) => interaction.followUp(opts));
     },
     async prefixExecute(message, _args, client) {
@@ -448,7 +447,7 @@ export const tokenCheckCmd = {
     prefix: 'tokencheck',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({ flags: 64 }).catch(() => {});
         await runTokenCheck(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts));
     },
     async prefixExecute(message, _args, client) {
@@ -462,7 +461,7 @@ export const autoquestCmd = {
     prefix: 'autoquest',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({ flags: 64 }).catch(() => {});
         await runAutoquestToggle(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts));
     },
     async prefixExecute(message, _args, client) {
@@ -476,7 +475,7 @@ export const linkCmd = {
     prefix: 'link',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
-        await interaction.showModal(buildLinkModal());
+        await interaction.showModal(buildLinkModal()).catch(() => {});
     },
     async prefixExecute(message, args, client) {
         if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
@@ -508,7 +507,7 @@ export const linkCmd = {
             await sendDM({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}"`))], flags: MessageFlags.IsComponentsV2 });
             return;
         }
-        await message.reply(buildLinkPrompt());
+        await message.reply(buildLinkPrompt()).catch(() => {});
     },
 };
 
@@ -522,7 +521,7 @@ export const unlinkCmd = {
         disableAutoquest(interaction.user.id);
         const c = new ContainerBuilder().setAccentColor(removed ? 0xFEE75C : 0x4F545C);
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(removed ? `# 🔓 Token Unlinked` : `# No Token Saved`));
-        await interaction.reply({ components: [c], flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
+        await interaction.reply({ components: [c], flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral }).catch(() => {});
     },
     async prefixExecute(message, _args, client) {
         if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
@@ -531,7 +530,7 @@ export const unlinkCmd = {
         disableAutoquest(message.author.id);
         const c = new ContainerBuilder().setAccentColor(removed ? 0xFEE75C : 0x4F545C);
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(removed ? `# 🔓 Token Unlinked` : `# No Token Saved`));
-        await message.reply({ components: [c], flags: MessageFlags.IsComponentsV2 });
+        await message.reply({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
     },
 };
 
@@ -539,10 +538,10 @@ export async function handleLinkModal(interaction, client) {
     const ts = client.tokenStore;
     const raw = interaction.fields.getTextInputValue('link_token_input');
     const token = sanitizeToken(raw);
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
 
     if (!isValidUserToken(token)) {
-        await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0xED4245).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ❌ Invalid Token Format`))], flags: MessageFlags.IsComponentsV2 });
+        await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0xED4245).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ❌ Invalid Token Format`))], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         return;
     }
 
@@ -557,16 +556,16 @@ export async function handleLinkModal(interaction, client) {
     } catch {}
 
     if (!verifyOk) {
-        await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0xED4245).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ❌ Token Rejected`))], flags: MessageFlags.IsComponentsV2 });
+        await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0xED4245).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ❌ Token Rejected`))], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         return;
     }
 
     ts.save(interaction.user.id, token);
-    await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}"`))], flags: MessageFlags.IsComponentsV2 });
+    await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}"`))], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
 }
 
 export async function handleLinkPromptButton(interaction) {
-    await interaction.showModal(buildLinkModal());
+    await interaction.showModal(buildLinkModal()).catch(() => {});
 }
 
 export async function handlePlatformButton(interaction) {
@@ -580,7 +579,7 @@ export async function handlePlatformButton(interaction) {
         await interaction.reply({
             content: `### 📌 How to use\n\`\`\n${pcScript}\n\`\`\n${pcVideo}`,
             flags: MessageFlags.Ephemeral
-        });
+        }).catch(() => {});
         return;
     }
 
@@ -591,7 +590,7 @@ export async function handlePlatformButton(interaction) {
         await interaction.reply({
             content: `### 📌 How to use\n\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
             flags: MessageFlags.Ephemeral
-        });
+        }).catch(() => {});
         return;
     }
 
@@ -602,7 +601,7 @@ export async function handlePlatformButton(interaction) {
         await interaction.reply({
             content: `### 📌 How to use\n\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
             flags: MessageFlags.Ephemeral
-        });
+        }).catch(() => {});
         return;
     }
 }
@@ -639,9 +638,10 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
                     `# 🤖 Auto-Quest Complete!\n**${live.config.messages.quest_name}** has been completed automatically.\n${claimed > 0 ? `🎁 **${claimed}** reward(s) claimed.\n` : ''}`,
                 ),
             );
-            await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 });
+            await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         } catch {}
     } catch (err) {
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
+
