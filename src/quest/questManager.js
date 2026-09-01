@@ -10,6 +10,9 @@ const QuestTaskConfigType = {
     WATCH_VIDEO_BY_STREAM: 'WATCH_VIDEO_BY_STREAM',
     LEARN_MORE:            'LEARN_MORE',
     WATCH_VIDEO_EMBED:     'WATCH_VIDEO_EMBED',
+    PLAY_ON_XBOX:          'PLAY_ON_XBOX',
+    PLAY_ON_PLAYSTATION:   'PLAY_ON_PLAYSTATION',
+    ACHIEVEMENT_IN_ACTIVITY: 'ACHIEVEMENT_IN_ACTIVITY',
 };
 
 export class QuestManager {
@@ -23,6 +26,11 @@ export class QuestManager {
     }
 
     static fromResponse(client, response) {
+        if (response.quest_enrollment_blocked_until !== null) {
+            throw new Error(
+                `Quest enrollment is blocked until ${response.quest_enrollment_blocked_until}.`,
+            );
+        }
         return new QuestManager(
             client,
             response.quests.map((quest) => Quest.create(quest)),
@@ -83,10 +91,10 @@ export class QuestManager {
         return claimed;
     }
 
-    async acceptQuest(questId) {
+    async acceptQuest(questId, isAndroid = false) {
         try {
             const r = await this.client.post(`/quests/${questId}/enroll`, {
-                location: 11,
+                location: isAndroid ? 12 : 11,
                 is_targeted: false,
                 metadata_raw: null,
             });
@@ -171,24 +179,26 @@ export class QuestManager {
 
     async doingQuest(quest, channel = null, userId = null, allQuests = []) {
         const questName = quest.config.messages.quest_name;
+        const isAndroid =
+            Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO_ON_MOBILE) &&
+            !Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO);
 
         if (!quest.isEnrolledQuest()) {
-            const enrolled = await this.acceptQuest(quest.id);
+            const enrolled = await this.acceptQuest(quest.id, isAndroid);
             if (!enrolled) return false;
             await this.#timeout(1000);
         }
 
         const taskConfig = quest.config.task_config ?? quest.config.task_config_v2;
-        if (!taskConfig) return false;
+        if (!taskConfig || !taskConfig.tasks) return false;
 
         const tasks = taskConfig.tasks ?? {};
-        
         const availableTaskTypes = Object.keys(tasks);
         if (availableTaskTypes.length === 0) return false;
 
         const taskName = availableTaskTypes[0];
         const task = tasks[taskName];
-        const secondsNeeded = task?.target || 30;
+        const secondsNeeded = task?.target || task?.seconds || 30;
         const eventName = task?.event_name ?? task?.type ?? taskName;
 
         const intervalTimer = setInterval(async () => {
@@ -247,7 +257,11 @@ export class QuestManager {
                     if (Date.now() - startTime > maxDurationMs) break;
 
                     try {
-                        const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: false });
+                        const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { 
+                            application_id: quest.config.application?.id,
+                            stream_key: null, 
+                            terminal: false 
+                        });
                         if (res) quest.updateUserStatus(extractStatus(res));
                     } catch (err) {
                         await this.#timeout(3000);
@@ -263,7 +277,11 @@ export class QuestManager {
                 }
 
                 try {
-                    const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { stream_key: null, terminal: true });
+                    const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { 
+                        application_id: quest.config.application?.id,
+                        stream_key: null, 
+                        terminal: true 
+                    });
                     if (res) quest.updateUserStatus(extractStatus(res));
                 } catch {}
             }
@@ -306,4 +324,3 @@ function readProgress(quest, eventName, taskName) {
     }
     return Number(val) || 0;
 }
-
