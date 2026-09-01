@@ -197,10 +197,12 @@ export class QuestManager {
                 taskName === 'LEARN_MORE' ||
                 taskName === 'WATCH_VIDEO_EMBED'
             ) {
-                // Direct target timestamp bhej kar video/learn_more quest ko turant complete karna
+                const currentTaskId = Object.keys(tasks).find(k => k === taskName) || taskName;
+
                 try {
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: secondsNeeded,
+                        task_id: currentTaskId,
                     });
                     if (res) {
                         quest.updateUserStatus(extractStatus(res));
@@ -210,6 +212,7 @@ export class QuestManager {
                         await this.client.post(`/quests/${quest.id}/video-progress`, {
                             timestamp: secondsNeeded,
                             event_name: eventName,
+                            task_id: currentTaskId,
                         });
                     } catch {}
                 }
@@ -223,6 +226,7 @@ export class QuestManager {
                         secondsDone = Math.min(secondsNeeded, secondsDone + secondsNeeded);
                         const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                             timestamp: secondsDone,
+                            task_id: currentTaskId,
                         });
                         if (res) {
                             quest.updateUserStatus(extractStatus(res));
@@ -286,7 +290,6 @@ function readProgress(quest, eventName, taskName) {
     const progress = quest.userStatus?.progress;
     if (!progress) return 0;
     
-    // Sabhi possible keys aur fallback values ko check karne ka smart logic
     let val = 0;
     if (eventName && progress[eventName]?.value != null) {
         val = progress[eventName].value;
