@@ -183,7 +183,6 @@ export class QuestManager {
 
         const tasks = taskConfig.tasks ?? {};
         
-        // --- FUTURE-PROOF DYNAMIC TASK AUTO-DETECTION ---
         const availableTaskTypes = Object.keys(tasks);
         if (availableTaskTypes.length === 0) return false;
 
@@ -200,7 +199,6 @@ export class QuestManager {
         }, 20000);
 
         try {
-            // Intelligent check for current and upcoming video/watch quest variations
             if (
                 taskName.includes('WATCH') || 
                 taskName.includes('VIDEO') || 
@@ -242,7 +240,6 @@ export class QuestManager {
                 await this.#refreshQuestStatus(quest);
 
             } else {
-                // Desktop activity, streaming, or any futuristic tasks
                 const maxDurationMs = (secondsNeeded + 300) * 1000;
                 const startTime = Date.now();
 
