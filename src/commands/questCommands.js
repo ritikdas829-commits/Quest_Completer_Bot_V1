@@ -154,31 +154,34 @@ function buildLinkModal() {
 }
 
 function buildLinkPrompt() {
-    const c1 = new ContainerBuilder().setAccentColor(0xFEE75C);
+    const c1 = new ContainerBuilder().setAccentColor(0x5865F2);
     c1.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# 🔗 Token Required\nYou need to link your Discord token before using quest commands.\n\n### HOW TO FIND YOUR TOKEN\nPick your platform below:`,
+            `# ⚡ DISCORD SESSION TOKEN REQUIRED\n` +
+            `-# Authentication protocol offline. Link your token to unlock quest automation.\n\n` +
+            `🔑 **Action Required:** Click the button below to open the secure entry portal.`,
         ),
     );
     c1.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
     c1.addActionRowComponents(
         new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('link_prompt').setLabel('🔗 update Token').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('link_prompt').setLabel('Link Token').setStyle(ButtonStyle.Primary).setEmoji('🔗'),
         ),
     );
 
     const c2 = new ContainerBuilder().setAccentColor(0x2b2d31);
     c2.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# ✨ Token Copy Guide\nSelect your platform below to view the script:`,
+            `# 📖 Setup Guide\n` +
+            `-# Select your device platform to view copy instructions:`,
         ),
     );
     c2.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
     c2.addActionRowComponents(
         new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('btn_pc').setLabel('PC').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('btn_android').setLabel('Android').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('btn_ios').setLabel('iOS').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('btn_pc').setLabel('PC').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_android').setLabel('Android').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_ios').setLabel('iOS').setStyle(ButtonStyle.Secondary),
         ),
     );
 
@@ -644,4 +647,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest:${userId}] Error:`, err?.message);
     }
 }
-
