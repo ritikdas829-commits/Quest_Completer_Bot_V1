@@ -107,4 +107,3 @@ function buildHelp(user, client) {
         flags: MessageFlags.IsComponentsV2 
     };
 }
-
