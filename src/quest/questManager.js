@@ -140,25 +140,27 @@ export class QuestManager {
                     totalOrbsEarned += orbAmount;
                 }
 
-                // Stylish Status indicators with visual mini progress bar feel
-                let status = q.isCompleted() ? '✨ **[COMPLETED]**' : '⚡ **[IN PROGRESS]**';
+                // Yahan aap apne server ke animated emojis (<a:name:ID>) laga sakte hain
+                let status = q.isCompleted() 
+                    ? '<a:check_animated:ID> **COMPLETED**' 
+                    : '<a:loading_animated:ID> **IN PROGRESS**';
 
-                description += `🔹 **${qName}**\n` +
-                               `┣ 🎁 **Reward:** \`${rewardText}\`\n` +
-                               `┗ 📌 **Status:** ${status}\n\n`;
+                description += `◆ **${qName}**\n` +
+                               `├ 🎁 **Reward:** \`${rewardText}\`\n` +
+                               `└ ⚡ **Status:** ${status}\n\n`;
             });
 
-            // Modern Header Style
-            const headerText = `╭━━━ 🚀 **LIVE QUEST RUNNER V3** ━━━╮\n` +
-                               `📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\`\n` +
-                               `💰 **Total Orbs:** \`${totalOrbsEarned} Orbs\`\n` +
-                               `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+            // Animated Dashboard Header Layout
+            const headerText = `┏━━━ <a:star_animated:ID> **INŠANE DYNASTY • PIPELINE** <a:star_animated:ID> ━━━┓\n` +
+                               `┃ 📊 **Progress:** \`${completedCount} / ${totalQuests} Done\`\n` +
+                               `┃ 💎 **Total Orbs:** \`${totalOrbsEarned} Orbs\`\n` +
+                               `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`;
 
             const embed = new EmbedBuilder()
-                .setColor(completedCount === totalQuests ? '#57F287' : '#9b59b6')
-                .setTitle('✨ Coquettes Style Autoprogress Dashboard')
+                .setColor(completedCount === totalQuests ? '#00FF66' : '#FF3366')
+                .setTitle('🛡️ Automated Quest Execution Dashboard')
                 .setDescription(`${headerText}\n\n${description.trim()}`)
-                .setFooter({ text: 'Auto Runner • Smart Multi-Detection Active' })
+                .setFooter({ text: 'InSaNe DyNaStY • Live Animated Runner v3' })
                 .setTimestamp();
 
             if (QuestManager.activeSessionMessage) {
@@ -202,7 +204,7 @@ export class QuestManager {
         }, 20000);
 
         try {
-            // Smart check for video or any new watch-type tasks automatically
+            // Smart auto-detection for video or watch-type tasks
             if (
                 taskName.includes('WATCH') || 
                 taskName.includes('VIDEO') || 
@@ -244,7 +246,7 @@ export class QuestManager {
                 await this.#refreshQuestStatus(quest);
 
             } else {
-                // Desktop play or stream or any alternative modern task types
+                // Desktop play or stream task handler
                 const maxDurationMs = (secondsNeeded + 300) * 1000;
                 const startTime = Date.now();
 
