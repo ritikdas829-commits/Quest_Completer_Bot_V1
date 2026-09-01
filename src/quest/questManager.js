@@ -53,7 +53,7 @@ export class QuestManager {
         );
     }
 
-    async claimRewards() {
+    async claimRewards(logFn) {
         try {
             const fresh = await this.client.get('/quests/@me');
             for (const q of fresh.quests) {
@@ -66,14 +66,20 @@ export class QuestManager {
         let claimed = 0;
         for (const quest of claimable) {
             try {
-                await this.client.post(`/quests/${quest.id}/claim-reward`, {
+                const res = await this.client.post(`/quests/${quest.id}/claim-reward`, {
                     location: 11,
                     is_targeted: false,
                     metadata_raw: null,
                 });
-                claimed++;
+                if (res) {
+                    claimed++;
+                    if (typeof logFn === 'function') logFn(`Claimed reward for quest: ${quest.id}`);
+                }
                 await this.#timeout(1500);
-            } catch (err) {}
+            } catch (err) {
+                // Agar koi ek quest claim hone mein error de, toh loop aage ki quests ke liye chalta rahega
+                continue;
+            }
         }
         return claimed;
     }
