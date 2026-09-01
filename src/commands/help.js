@@ -31,7 +31,7 @@ export default {
 function buildHelp(user, client) {
     const avatar = user.displayAvatarURL({ size: 128, extension: 'png' });
     const botAvatar = client.user.displayAvatarURL({ size: 128, extension: 'png' });
-    const c = new ContainerBuilder().setAccentColor(0xFF3366); // Neon Cyber Theme
+    const c = new ContainerBuilder().setAccentColor(0xFF3366);
 
     // ── Header Matrix ───────────────────────────────────────────────────────
     c.addSectionComponents(
@@ -71,7 +71,8 @@ function buildHelp(user, client) {
 
     c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
 
-    // ── System Terminal ────────────────────────────────----------------     c.addTextDisplayComponents(
+    // ── System Terminal ─────────────────────────────────────────────────────
+    c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `🛠️ **[ SYSTEM TERMINAL ]**\n` +
             `▫️ \`/ping\` (\`${PREFIX}ping\`) ➔ Measure node latency\n` +
@@ -106,3 +107,4 @@ function buildHelp(user, client) {
         flags: MessageFlags.IsComponentsV2 
     };
 }
+
