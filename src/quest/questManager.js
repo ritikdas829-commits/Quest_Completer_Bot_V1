@@ -123,11 +123,12 @@ export class QuestManager {
             questList.forEach((q) => {
                 const qName = q.config.messages.quest_name;
                 let rewardText = 'Orbs';
-                let orbAmount = 200;
+                let orbAmount = 240;
 
                 const rewards = q.config.rewards_config?.rewards;
                 if (rewards && rewards.length > 0) {
                     rewardText = rewards[0].messages?.name || 'Orbs';
+                    if (rewards[0].orb_quantity) orbAmount = rewards[0].orb_quantity;
                 }
 
                 if (q.isCompleted()) {
@@ -181,7 +182,6 @@ export class QuestManager {
         const secondsNeeded = task.target || 30;
         const eventName = task.event_name ?? task.type ?? taskName;
 
-        // Har 20 seconds mein status refresh aur session box update karne ke liye loop
         const intervalTimer = setInterval(async () => {
             await this.#refreshQuestStatus(quest);
             if (channel && allQuests.length > 0) {
@@ -197,6 +197,7 @@ export class QuestManager {
                 taskName === 'LEARN_MORE' ||
                 taskName === 'WATCH_VIDEO_EMBED'
             ) {
+                // Direct target timestamp bhej kar video/learn_more quest ko turant complete karna
                 try {
                     const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: secondsNeeded,
@@ -219,7 +220,7 @@ export class QuestManager {
                 let secondsDone = readProgress(quest, eventName, taskName);
                 while (!quest.isCompleted() && secondsDone < secondsNeeded) {
                     try {
-                        secondsDone = Math.min(secondsNeeded, secondsDone + 15);
+                        secondsDone = Math.min(secondsNeeded, secondsDone + secondsNeeded);
                         const res = await this.client.post(`/quests/${quest.id}/video-progress`, {
                             timestamp: secondsDone,
                         });
@@ -284,8 +285,21 @@ function extractStatus(res) {
 function readProgress(quest, eventName, taskName) {
     const progress = quest.userStatus?.progress;
     if (!progress) return 0;
-    const byEvent = eventName ? progress[eventName]?.value : undefined;
-    const byTask  = progress[taskName]?.value;
-    const genericWatch = progress['WATCH_VIDEO']?.value ?? progress['WATCH_VIDEO_EMBED']?.value ?? progress['LEARN_MORE']?.value;
-    return Number(byEvent ?? byTask ?? genericWatch ?? 0) || 0;
+    
+    // Sabhi possible keys aur fallback values ko check karne ka smart logic
+    let val = 0;
+    if (eventName && progress[eventName]?.value != null) {
+        val = progress[eventName].value;
+    } else if (taskName && progress[taskName]?.value != null) {
+        val = progress[taskName].value;
+    } else {
+        const keys = Object.keys(progress);
+        for (const k of keys) {
+            if (progress[k]?.value != null) {
+                val = progress[k].value;
+                break;
+            }
+        }
+    }
+    return Number(val) || 0;
 }
