@@ -140,27 +140,23 @@ export class QuestManager {
                     totalOrbsEarned += orbAmount;
                 }
 
-                // Yahan aap apne server ke animated emojis (<a:name:ID>) laga sakte hain
-                let status = q.isCompleted() 
-                    ? '<a:check_animated:ID> **COMPLETED**' 
-                    : '<a:loading_animated:ID> **IN PROGRESS**';
+                let status = q.isCompleted() ? '🟢 **COMPLETED**' : '⏳ **IN PROGRESS**';
 
                 description += `◆ **${qName}**\n` +
                                `├ 🎁 **Reward:** \`${rewardText}\`\n` +
                                `└ ⚡ **Status:** ${status}\n\n`;
             });
 
-            // Animated Dashboard Header Layout
-            const headerText = `┏━━━ <a:star_animated:ID> **INŠANE DYNASTY • PIPELINE** <a:star_animated:ID> ━━━┓\n` +
+            const headerText = `┏━━━ 🤖 **AI NEURAL • PIPELINE V4** 🤖 ━━━┓\n` +
                                `┃ 📊 **Progress:** \`${completedCount} / ${totalQuests} Done\`\n` +
                                `┃ 💎 **Total Orbs:** \`${totalOrbsEarned} Orbs\`\n` +
                                `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`;
 
             const embed = new EmbedBuilder()
-                .setColor(completedCount === totalQuests ? '#00FF66' : '#FF3366')
-                .setTitle('🛡️ Automated Quest Execution Dashboard')
+                .setColor(completedCount === totalQuests ? '#00FF66' : '#9b59b6')
+                .setTitle('🧠 AI Autonomous Quest Execution Dashboard')
                 .setDescription(`${headerText}\n\n${description.trim()}`)
-                .setFooter({ text: 'InSaNe DyNaStY • Live Animated Runner v3' })
+                .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner' })
                 .setTimestamp();
 
             if (QuestManager.activeSessionMessage) {
@@ -187,7 +183,7 @@ export class QuestManager {
 
         const tasks = taskConfig.tasks ?? {};
         
-        // --- DYNAMIC AUTO-DETECTION FOR NEW & OLD QUESTS ---
+        // --- FUTURE-PROOF DYNAMIC TASK AUTO-DETECTION ---
         const availableTaskTypes = Object.keys(tasks);
         if (availableTaskTypes.length === 0) return false;
 
@@ -204,12 +200,12 @@ export class QuestManager {
         }, 20000);
 
         try {
-            // Smart auto-detection for video or watch-type tasks
+            // Intelligent check for current and upcoming video/watch quest variations
             if (
                 taskName.includes('WATCH') || 
                 taskName.includes('VIDEO') || 
                 taskName.includes('LEARN') || 
-                taskName === 'WATCH_VIDEO_EMBED'
+                taskName.includes('EMBED')
             ) {
                 const currentTaskId = taskName;
                 let secondsDone = readProgress(quest, eventName, taskName);
@@ -246,7 +242,7 @@ export class QuestManager {
                 await this.#refreshQuestStatus(quest);
 
             } else {
-                // Desktop play or stream task handler
+                // Desktop activity, streaming, or any futuristic tasks
                 const maxDurationMs = (secondsNeeded + 300) * 1000;
                 const startTime = Date.now();
 
@@ -313,3 +309,4 @@ function readProgress(quest, eventName, taskName) {
     }
     return Number(val) || 0;
 }
+
