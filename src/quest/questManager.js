@@ -144,7 +144,7 @@ export class QuestManager {
             const headerText = `🚀 **Quest Session Progress**\n📊 **Progress:** \`${completedCount} / ${totalQuests} Completed\`\n💰 **Total Orbs Earned:** \`${totalOrbsEarned} Orbs\``;
 
             const embed = new EmbedBuilder()
-                .setColor('#ff75a0')
+                .setColor(completedCount === totalQuests ? '#57F287' : '#ff75a0')
                 .setTitle('✨ Coquettes Style Autoprogress v3')
                 .setDescription(`${headerText}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${description.trim()}`)
                 .setFooter({ text: 'Auto Runner • Multi-threaded' })
@@ -181,7 +181,7 @@ export class QuestManager {
         const secondsNeeded = task.target || 30;
         const eventName = task.event_name ?? task.type ?? taskName;
 
-        // Har 20 seconds mein status refresh aur session box edit karne ke liye interval loop
+        // Har 20 seconds mein status refresh aur session box update karne ke liye loop
         const intervalTimer = setInterval(async () => {
             await this.#refreshQuestStatus(quest);
             if (channel && allQuests.length > 0) {
@@ -204,7 +204,14 @@ export class QuestManager {
                     if (res) {
                         quest.updateUserStatus(extractStatus(res));
                     }
-                } catch (err) {}
+                } catch (err) {
+                    try {
+                        await this.client.post(`/quests/${quest.id}/video-progress`, {
+                            timestamp: secondsNeeded,
+                            event_name: eventName,
+                        });
+                    } catch {}
+                }
 
                 await this.#refreshQuestStatus(quest);
                 if (channel) QuestManager.updateSessionBox(channel, allQuests);
@@ -263,15 +270,6 @@ export class QuestManager {
             QuestManager.updateSessionBox(channel, allQuests);
         }
 
-        if (userId && quest.isCompleted()) {
-            try {
-                const user = await this.client.users.fetch(userId);
-                if (user) {
-                    await user.send(`✨ **${questName}**\n↳ Reward Completed\n✓ done`);
-                }
-            } catch (dmErr) {}
-        }
-
         return true;
     }
 }
@@ -288,6 +286,6 @@ function readProgress(quest, eventName, taskName) {
     if (!progress) return 0;
     const byEvent = eventName ? progress[eventName]?.value : undefined;
     const byTask  = progress[taskName]?.value;
-    const genericWatch = progress['WATCH_VIDEO']?.value ?? progress['WATCH_VIDEO_EMBED']?.value;
+    const genericWatch = progress['WATCH_VIDEO']?.value ?? progress['WATCH_VIDEO_EMBED']?.value ?? progress['LEARN_MORE']?.value;
     return Number(byEvent ?? byTask ?? genericWatch ?? 0) || 0;
 }
