@@ -158,7 +158,7 @@ function buildLinkPrompt() {
     c1.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             `# ⚡ DISCORD SESSION TOKEN REQUIRED\n` +
-            `-# Authentication protocol offline. Link your token to unlock quest automation.\n\n` +
+            `-# Authentication protocol offline. Link your token to unlock quest automation V3.\n\n` +
             `🔑 **Action Required:** Click the button below to open the secure entry portal.`,
         ),
     );
@@ -248,7 +248,7 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
                         const c = new ContainerBuilder().setAccentColor(0x57F287);
                         c.addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
-                                `# ✨ Quest Complete!\n**${quest.config.messages.quest_name}** has been completed successfully.\n✓ Reward collected!`
+                                `# ✨ Quest Complete (V3)!\n**${quest.config.messages.quest_name}** has been completed successfully.\n✓ Reward collected!`
                             ),
                         );
                         await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
@@ -311,10 +311,13 @@ async function runQuestList(userId, tokenStore, send) {
             const taskLines = Object.entries((cfg.task_config ?? cfg.task_config_v2)?.tasks ?? {}).map(([type, task]) => {
                 const meta = TASK_META[type] ?? { icon: '⚙️', label: type };
                 let dur = '';
-                if (type === 'PLAY_ON_DESKTOP' || type === 'STREAM_ON_DESKTOP') dur = `  •  **${Math.ceil(task.target / 60)} min**`;
-                else {
-                    const s = task.target;
-                    dur = s >= 60 ? `  •  **${Math.ceil(s / 60)} min**` : `  •  **${s}s**`;
+                let targetSecs = task.target || 0;
+                
+                if (type === 'PLAY_ON_DESKTOP' || type === 'STREAM_ON_DESKTOP') {
+                    const mins = Math.ceil(targetSecs / 60);
+                    dur = `  •  ⏱️ **Duration: ${mins} min** (${targetSecs}s)`;
+                } else {
+                    dur = targetSecs >= 60 ? `  •  ⏱️ **Duration: ${Math.ceil(targetSecs / 60)} min**` : `  •  ⏱️ **Duration: ${targetSecs}s**`;
                 }
                 return `${meta.icon} ${meta.label}${dur}`;
             });
@@ -338,8 +341,8 @@ async function runQuestList(userId, tokenStore, send) {
             c.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));
             c.addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(
-                    `📊 **Status:** ${st.label}   📅 **Expires:** <t:${expiresEpoch}:R> *(${daysLeft}d)*\n\n` +
-                    `📋 **Task**\n${taskLines.join('\n') || '*Unknown*'}\n\n` +
+                    `📊 **Status:** ${st.label}   📅 **Expires:** <t:${expiresEpoch}:R> *(${daysLeft}d remaining)*\n\n` +
+                    `📋 **Task Details & Timer**\n${taskLines.join('\n') || '*Unknown*'}\n\n` +
                     `🎁 **Reward**\n${rewardLines.join('\n') || '*No rewards listed*'}`,
                 ),
             );
@@ -372,7 +375,7 @@ async function runTokenCheck(userId, tokenStore, replyFn) {
     const c = new ContainerBuilder().setAccentColor(valid ? 0x57F287 : 0xED4245);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            valid ? `# ✅ Token is Valid\nLinked as **"${accountName}"**.` : `# ❌ Token Invalid or Expired\nUse \`${PREFIX}unlink\` then \`${PREFIX}link\` to save a fresh token.`,
+            valid ? `# ✅ Token is Valid (V3)\nLinked as **"${accountName}"**.` : `# ❌ Token Invalid or Expired\nUse \`${PREFIX}unlink\` then \`${PREFIX}link\` to save a fresh token.`,
         ),
     );
     await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
@@ -397,14 +400,14 @@ async function runAutoquestToggle(userId, tokenStore, replyFn) {
     const c = new ContainerBuilder().setAccentColor(0x57F287);
     c.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            `# 🤖 Auto-Quest Enabled!\nEvery new Discord quest will be auto-completed for you in the background.`,
+            `# 🤖 Auto-Quest Enabled (V3)!\nEvery new Discord quest will be auto-completed for you in the background with timer tracking.`,
         ),
     );
     await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
 }
 
 export const questCmd = {
-    data: new SlashCommandBuilder().setName('quest').setDescription('Complete all available Discord quests in a single box session'),
+    data: new SlashCommandBuilder().setName('quest').setDescription('Complete all available Discord quests in a single box session V3'),
     prefix: 'quest',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
@@ -418,7 +421,7 @@ export const questCmd = {
 };
 
 export const questAllCmd = {
-    data: new SlashCommandBuilder().setName('q').setDescription('Complete all quests at once in a single session box'),
+    data: new SlashCommandBuilder().setName('q').setDescription('Complete all quests at once in a single session box V3'),
     prefix: 'q',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
@@ -432,7 +435,7 @@ export const questAllCmd = {
 };
 
 export const questListCmd = {
-    data: new SlashCommandBuilder().setName('questlist').setDescription('List all Discord quests and their status'),
+    data: new SlashCommandBuilder().setName('questlist').setDescription('List all Discord quests and their duration status V3'),
     prefix: 'questlist',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
@@ -460,7 +463,7 @@ export const tokenCheckCmd = {
 };
 
 export const autoquestCmd = {
-    data: new SlashCommandBuilder().setName('autoquest').setDescription('Auto-complete every new quest the moment it drops'),
+    data: new SlashCommandBuilder().setName('autoquest').setDescription('Auto-complete every new quest the moment it drops V3'),
     prefix: 'autoquest',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
@@ -474,7 +477,7 @@ export const autoquestCmd = {
 };
 
 export const linkCmd = {
-    data: new SlashCommandBuilder().setName('link').setDescription('Save your Discord token'),
+    data: new SlashCommandBuilder().setName('link').setDescription('Save your Discord token V3'),
     prefix: 'link',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
@@ -507,7 +510,7 @@ export const linkCmd = {
             } catch {}
             if (!verifyOk) return;
             ts.save(message.author.id, token);
-            await sendDM({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}"`))], flags: MessageFlags.IsComponentsV2 });
+            await sendDM({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}" (V3)`))], flags: MessageFlags.IsComponentsV2 });
             return;
         }
         await message.reply(buildLinkPrompt()).catch(() => {});
@@ -523,7 +526,7 @@ export const unlinkCmd = {
         const removed = ts.remove(interaction.user.id);
         disableAutoquest(interaction.user.id);
         const c = new ContainerBuilder().setAccentColor(removed ? 0xFEE75C : 0x4F545C);
-        c.addTextDisplayComponents(new TextDisplayBuilder().setContent(removed ? `# 🔓 Token Unlinked` : `# No Token Saved`));
+        c.addTextDisplayComponents(new TextDisplayBuilder().setContent(removed ? `# 🔓 Token Unlinked (V3)` : `# No Token Saved`));
         await interaction.reply({ components: [c], flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral }).catch(() => {});
     },
     async prefixExecute(message, _args, client) {
@@ -532,7 +535,7 @@ export const unlinkCmd = {
         const removed = ts.remove(message.author.id);
         disableAutoquest(message.author.id);
         const c = new ContainerBuilder().setAccentColor(removed ? 0xFEE75C : 0x4F545C);
-        c.addTextDisplayComponents(new TextDisplayBuilder().setContent(removed ? `# 🔓 Token Unlinked` : `# No Token Saved`));
+        c.addTextDisplayComponents(new TextDisplayBuilder().setContent(removed ? `# 🔓 Token Unlinked (V3)` : `# No Token Saved`));
         await message.reply({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
     },
 };
@@ -564,7 +567,7 @@ export async function handleLinkModal(interaction, client) {
     }
 
     ts.save(interaction.user.id, token);
-    await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}"`))], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
+    await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Token Linked as "${accountName}" (V3)`))], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
 }
 
 export async function handleLinkPromptButton(interaction) {
@@ -580,7 +583,7 @@ export async function handlePlatformButton(interaction) {
         const pcVideo = 'https://cdn.discordapp.com/attachments/1539823157425348758/1540748022399504404/lv_0_20260821085534.mp4';
 
         await interaction.reply({
-            content: `### 📌 How to use\n\`\`\n${pcScript}\n\`\`\n${pcVideo}`,
+            content: `### 📌 How to use (V3)\n\`\`\n${pcScript}\n\`\`\n${pcVideo}`,
             flags: MessageFlags.Ephemeral
         }).catch(() => {});
         return;
@@ -591,7 +594,7 @@ export async function handlePlatformButton(interaction) {
         const androidVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4';
 
         await interaction.reply({
-            content: `### 📌 How to use\n\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
+            content: `### 📌 How to use (V3)\n\`\`\n${androidScript}\n\`\`\n${androidVideo}`,
             flags: MessageFlags.Ephemeral
         }).catch(() => {});
         return;
@@ -602,7 +605,7 @@ export async function handlePlatformButton(interaction) {
         const iosVideo = 'https://cdn.discordapp.com/attachments/1539722714036699276/1542207446423048342/lv_0_20260826215752.mp4';
 
         await interaction.reply({
-            content: `### 📌 How to use\n\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
+            content: `### 📌 How to use (V3)\n\`\`\n${iosScript}\n\`\`\n${iosVideo}`,
             flags: MessageFlags.Ephemeral
         }).catch(() => {});
         return;
@@ -617,7 +620,7 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
     const { Quest: Q } = await import('../quest/quest.js');
     const qc = new QC(token);
     const logs = [];
-    const log = (m) => { console.log(`[AutoQuest:${userId}]`, m); logs.push(m); };
+    const log = (m) => { console.log(`[AutoQuest V3:${userId}]`, m); logs.push(m); };
 
     try {
         const manager = await qc.fetchQuests();
@@ -638,12 +641,12 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
             const c = new ContainerBuilder().setAccentColor(0x57F287);
             c.addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(
-                    `# 🤖 Auto-Quest Complete!\n**${live.config.messages.quest_name}** has been completed automatically.\n${claimed > 0 ? `🎁 **${claimed}** reward(s) claimed.\n` : ''}`,
+                    `# 🤖 Auto-Quest Complete (V3)!\n**${live.config.messages.quest_name}** has been completed automatically.\n${claimed > 0 ? `🎁 **${claimed}** reward(s) claimed.\n` : ''}`,
                 ),
             );
             await dm.send({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
         } catch {}
     } catch (err) {
-        console.error(`[AutoQuest:${userId}] Error:`, err?.message);
+        console.error(`[AutoQuest V3:${userId}] Error:`, err?.message);
     }
 }
