@@ -170,6 +170,7 @@ export async function checkCommandAccess(user, member) {
 
     const currentCount = inviteData[user.id]?.count || 0;
 
+    // AUTO-CORRECTION FIX: Agar database count 2 ya usse zyada hai, toh role turant wapas mil jayega
     if (currentCount >= 2) {
         if (targetRole && !member.roles.cache.has(targetRole.id)) {
             await member.roles.add(targetRole).catch(() => {});
@@ -193,4 +194,3 @@ export async function checkCommandAccess(user, member) {
                  `• **Boost the Server**` 
     };
 }
-
