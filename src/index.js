@@ -173,5 +173,14 @@ for (const file of eventFiles) {
     }
 }
 
+// Global Crash Handlers to prevent unexpected bot shutdowns
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('⚠️ Uncaught Exception thrown:', error);
+});
+
 client.login(TOKEN);
 
