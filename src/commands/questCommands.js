@@ -39,6 +39,7 @@ function checkUserAccess(member, interactionOrMessage) {
     const userId = member.id || member.author?.id;
     if (!userId) return false;
 
+    // Advanced Booster Check
     const isBooster = member.premiumSince !== null || member.roles?.premiumSubscriberRole;
     const customBoostRole = member.guild?.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
     const hasCustomBoostRole = customBoostRole && member.roles?.cache.has(customBoostRole.id);
