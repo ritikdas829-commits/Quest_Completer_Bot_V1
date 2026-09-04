@@ -15,6 +15,20 @@ const QuestTaskConfigType = {
     ACHIEVEMENT_IN_ACTIVITY: 'ACHIEVEMENT_IN_ACTIVITY',
 };
 
+const TASK_PRIORITY = [
+    QuestTaskConfigType.WATCH_VIDEO,
+    QuestTaskConfigType.WATCH_VIDEO_ON_MOBILE,
+    QuestTaskConfigType.WATCH_VIDEO_EMBED,
+    QuestTaskConfigType.WATCH_VIDEO_BY_STREAM,
+    QuestTaskConfigType.LEARN_MORE,
+    QuestTaskConfigType.PLAY_ON_DESKTOP,
+    QuestTaskConfigType.STREAM_ON_DESKTOP,
+    QuestTaskConfigType.PLAY_ACTIVITY,
+    QuestTaskConfigType.PLAY_ON_XBOX,
+    QuestTaskConfigType.PLAY_ON_PLAYSTATION,
+    QuestTaskConfigType.ACHIEVEMENT_IN_ACTIVITY,
+];
+
 export class QuestManager {
     #quests = new Map();
 
@@ -191,16 +205,20 @@ export class QuestManager {
                 (q) => q.id === quest.id,
             );
 
-            if (updated?.user_status) {
+            if (!updated) {
+                return false;
+            }
+
+            if (updated.user_status) {
                 quest.updateUserStatus(
                     updated.user_status,
                 );
-
-                return true;
             }
-        } catch {}
 
-        return false;
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     async refreshAll() {
@@ -256,7 +274,7 @@ export class QuestManager {
         questList,
     ) {
         const quests = Array.isArray(questList)
-            ? questList
+            ? questList.filter(Boolean)
             : [];
 
         let completedCount = 0;
@@ -265,8 +283,6 @@ export class QuestManager {
         const sections = [];
 
         for (const quest of quests) {
-            if (!quest) continue;
-
             const name =
                 quest.config?.messages?.quest_name ||
                 'Unknown Quest';
@@ -278,33 +294,44 @@ export class QuestManager {
                 completedCount++;
             }
 
-            const reward = getRewardInfo(quest);
+            const reward =
+                getRewardInfo(quest);
 
             if (completed) {
                 totalOrbs += reward.amount;
             }
 
+            const task =
+                detectTask(quest);
+
             const progress =
-                getProgressInfo(quest);
+                getProgressInfo(
+                    quest,
+                    task,
+                );
+
+            let status = '⏳ **WAITING**';
+
+            if (completed) {
+                status = '🟢 **COMPLETED**';
+            } else if (progress.value > 0) {
+                status = '🟡 **IN PROGRESS**';
+            }
 
             const progressText =
                 progress.target > 0
                     ? `\`${formatNumber(progress.value)} / ${formatNumber(progress.target)}\``
                     : '`Waiting for server data`';
 
-            let status;
-
-            if (completed) {
-                status = '🟢 **COMPLETED**';
-            } else if (progress.value > 0) {
-                status = '🟡 **IN PROGRESS**';
-            } else {
-                status = '⏳ **WAITING**';
-            }
+            const taskText =
+                task?.name
+                    ? `\`${task.name}\``
+                    : '`Unknown`';
 
             sections.push(
                 [
                     `◆ **${escapeMarkdown(name)}**`,
+                    `├ 🎯 **Task:** ${taskText}`,
                     `├ 🎁 **Reward:** \`${escapeMarkdown(reward.name)}${reward.amount > 0 ? ` • ${reward.amount}` : ''}\``,
                     `├ 📈 **Progress:** ${progressText}`,
                     `└ ⚡ **Status:** ${status}`,
@@ -326,16 +353,17 @@ export class QuestManager {
             completedCount === total;
 
         const header = [
-            '┏━━━ 🤖 **QUEST PIPELINE V5** 🤖 ━━━┓',
+            '┏━━━ 🤖 **QUEST PIPELINE V6** 🤖 ━━━┓',
             `┃ 📊 **Progress:** \`${completedCount} / ${total} Done\``,
             `┃ 📈 **Completion:** \`${percentage}%\``,
             `┃ 💎 **Earned:** \`${formatNumber(totalOrbs)} Orbs\``,
             `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`,
         ].join('\n');
 
-        const dashboardStatus = allCompleted
-            ? '🟢 **ALL QUESTS COMPLETED**'
-            : '🟣 **QUEST PIPELINE ACTIVE**';
+        const dashboardStatus =
+            allCompleted
+                ? '🟢 **ALL QUESTS COMPLETED**'
+                : '🟣 **QUEST PIPELINE ACTIVE**';
 
         const embed = new EmbedBuilder()
             .setColor(
@@ -352,13 +380,14 @@ export class QuestManager {
                     '',
                     dashboardStatus,
                     '',
-                    sections.length
+                    sections.length > 0
                         ? sections.join('\n\n')
                         : '⏳ No quests found.',
                 ].join('\n'),
             )
             .setFooter({
-                text: 'InSaNe DyNaStY • Live Quest Monitor',
+                text:
+                    'InSaNe DyNaStY • Live Quest Monitor',
             })
             .setTimestamp();
 
@@ -396,14 +425,10 @@ export class QuestManager {
     ) {
         if (!quest) return false;
 
-        /*
-         * Detect which task the quest actually contains.
-         * This fixes the old "first task only" behaviour.
-         */
-        const taskInfo =
+        const task =
             detectTask(quest);
 
-        if (!taskInfo) {
+        if (!task) {
             if (channel) {
                 await QuestManager.updateSessionBox(
                     channel,
@@ -414,15 +439,12 @@ export class QuestManager {
             return false;
         }
 
-        /*
-         * Detect mobile-only quests.
-         */
         const isAndroid =
-            taskInfo.name ===
+            task.name ===
             QuestTaskConfigType.WATCH_VIDEO_ON_MOBILE;
 
         /*
-         * Enroll the quest when necessary.
+         * Enroll the quest normally.
          */
         if (!quest.isEnrolledQuest()) {
             const enrolled =
@@ -439,16 +461,39 @@ export class QuestManager {
         }
 
         /*
-         * IMPORTANT:
-         *
-         * This version does not fabricate video/heartbeat
-         * progress. It refreshes the real server status and
-         * lets the actual Discord activity generate progress.
+         * Immediately refresh the real server state.
          */
+        await this.refreshQuest(quest);
 
-        const refreshInterval =
+        if (channel) {
+            await QuestManager.updateSessionBox(
+                channel,
+                allQuests,
+            );
+        }
+
+        /*
+         * Monitor the actual quest state while the
+         * user performs the required activity.
+         */
+        const target =
+            task.target > 0
+                ? task.target
+                : 60;
+
+        const maxWait =
+            Math.max(
+                120000,
+                (target + 120) * 1000,
+            );
+
+        const startTime = Date.now();
+
+        const refreshTimer =
             setInterval(async () => {
-                await this.refreshQuest(quest);
+                await this.refreshQuest(
+                    quest,
+                );
 
                 if (channel) {
                     await QuestManager.updateSessionBox(
@@ -459,41 +504,9 @@ export class QuestManager {
             }, 5000);
 
         try {
-            /*
-             * Immediately show current server state.
-             */
-            await this.refreshQuest(quest);
-
-            if (channel) {
-                await QuestManager.updateSessionBox(
-                    channel,
-                    allQuests,
-                );
-            }
-
-            /*
-             * Wait while the real activity is progressing.
-             *
-             * The maximum wait is based on the task target,
-             * with an additional safety buffer.
-             */
-            const target =
-                taskInfo.target > 0
-                    ? taskInfo.target
-                    : 60;
-
-            const maxWait =
-                Math.max(
-                    120000,
-                    (target + 120) * 1000,
-                );
-
-            const start =
-                Date.now();
-
             while (!quest.isCompleted()) {
                 if (
-                    Date.now() - start >
+                    Date.now() - startTime >
                     maxWait
                 ) {
                     break;
@@ -501,7 +514,9 @@ export class QuestManager {
 
                 await timeout(5000);
 
-                await this.refreshQuest(quest);
+                await this.refreshQuest(
+                    quest,
+                );
 
                 if (channel) {
                     await QuestManager.updateSessionBox(
@@ -511,7 +526,7 @@ export class QuestManager {
                 }
             }
         } finally {
-            clearInterval(refreshInterval);
+            clearInterval(refreshTimer);
         }
 
         await this.refreshQuest(quest);
@@ -523,33 +538,21 @@ export class QuestManager {
             );
         }
 
-        return quest.isCompleted();
+        return Boolean(
+            quest.isCompleted(),
+        );
     }
 }
 
-/*
- * Find the correct configured task instead of blindly
- * selecting tasks[0].
- */
+/* ------------------------------------------------ */
+/* TASK DETECTION                                  */
+/* ------------------------------------------------ */
+
 function detectTask(quest) {
     const configs = [
         quest?.config?.task_config_v2,
         quest?.config?.task_config,
     ].filter(Boolean);
-
-    const preferred = [
-        QuestTaskConfigType.WATCH_VIDEO,
-        QuestTaskConfigType.WATCH_VIDEO_ON_MOBILE,
-        QuestTaskConfigType.WATCH_VIDEO_EMBED,
-        QuestTaskConfigType.WATCH_VIDEO_BY_STREAM,
-        QuestTaskConfigType.LEARN_MORE,
-        QuestTaskConfigType.PLAY_ACTIVITY,
-        QuestTaskConfigType.PLAY_ON_DESKTOP,
-        QuestTaskConfigType.STREAM_ON_DESKTOP,
-        QuestTaskConfigType.PLAY_ON_XBOX,
-        QuestTaskConfigType.PLAY_ON_PLAYSTATION,
-        QuestTaskConfigType.ACHIEVEMENT_IN_ACTIVITY,
-    ];
 
     for (const config of configs) {
         const tasks = config?.tasks;
@@ -562,44 +565,44 @@ function detectTask(quest) {
         }
 
         /*
-         * Prefer known task types.
+         * Prefer known Discord quest task types.
          */
-        for (const type of preferred) {
-            if (tasks[type]) {
-                const task = tasks[type];
+        for (const type of TASK_PRIORITY) {
+            if (!tasks[type]) continue;
 
-                return {
-                    name: type,
-                    task,
-                    eventName:
-                        task?.event_name ??
-                        task?.type ??
-                        type,
-                    target:
-                        getTarget(task),
-                };
-            }
-        }
-
-        /*
-         * Fallback for future/unknown task types.
-         */
-        const firstName =
-            Object.keys(tasks)[0];
-
-        if (firstName) {
-            const task =
-                tasks[firstName];
+            const task = tasks[type];
 
             return {
-                name: firstName,
+                name: type,
                 task,
                 eventName:
                     task?.event_name ??
                     task?.type ??
-                    firstName,
-                target:
-                    getTarget(task),
+                    type,
+                target: getTarget(task),
+            };
+        }
+
+        /*
+         * Fallback for newer/unknown task types.
+         */
+        const names =
+            Object.keys(tasks);
+
+        for (const name of names) {
+            const task =
+                tasks[name];
+
+            if (!task) continue;
+
+            return {
+                name,
+                task,
+                eventName:
+                    task?.event_name ??
+                    task?.type ??
+                    name,
+                target: getTarget(task),
             };
         }
     }
@@ -607,21 +610,41 @@ function detectTask(quest) {
     return null;
 }
 
-function getTarget(task) {
-    const value =
-        Number(
-            task?.target ??
-            task?.seconds ??
-            task?.duration ??
-            0,
-        );
+/* ------------------------------------------------ */
+/* TARGET                                           */
+/* ------------------------------------------------ */
 
-    return Number.isFinite(value) && value > 0
-        ? value
-        : 0;
+function getTarget(task) {
+    const values = [
+        task?.target,
+        task?.seconds,
+        task?.duration,
+        task?.required_seconds,
+    ];
+
+    for (const value of values) {
+        const number =
+            Number(value);
+
+        if (
+            Number.isFinite(number) &&
+            number > 0
+        ) {
+            return number;
+        }
+    }
+
+    return 0;
 }
 
-function getProgressInfo(quest) {
+/* ------------------------------------------------ */
+/* PROGRESS                                         */
+/* ------------------------------------------------ */
+
+function getProgressInfo(
+    quest,
+    detectedTask = null,
+) {
     const progress =
         quest?.userStatus?.progress;
 
@@ -631,47 +654,142 @@ function getProgressInfo(quest) {
     ) {
         return {
             value: 0,
-            target: 0,
+            target:
+                detectedTask?.target || 0,
         };
     }
 
+    /*
+     * First try the detected task's event name.
+     */
+    if (
+        detectedTask?.eventName &&
+        progress[
+            detectedTask.eventName
+        ]
+    ) {
+        const item =
+            progress[
+                detectedTask.eventName
+            ];
+
+        return {
+            value: safeNumber(
+                item?.value,
+            ),
+            target:
+                safeTarget(
+                    item,
+                    detectedTask.target,
+                ),
+        };
+    }
+
+    /*
+     * Then try the task name.
+     */
+    if (
+        detectedTask?.name &&
+        progress[
+            detectedTask.name
+        ]
+    ) {
+        const item =
+            progress[
+                detectedTask.name
+            ];
+
+        return {
+            value: safeNumber(
+                item?.value,
+            ),
+            target:
+                safeTarget(
+                    item,
+                    detectedTask.target,
+                ),
+        };
+    }
+
+    /*
+     * Finally select the entry with the greatest
+     * actual progress.
+     */
     let best = {
         value: 0,
-        target: 0,
+        target:
+            detectedTask?.target || 0,
     };
 
     for (const key of Object.keys(progress)) {
-        const item = progress[key];
+        const item =
+            progress[key];
 
         if (!item) continue;
 
         const value =
-            Number(item.value);
+            safeNumber(item.value);
 
         const target =
-            Number(
-                item.target ??
-                item.total ??
-                item.required ??
-                0,
+            safeTarget(
+                item,
+                detectedTask?.target || 0,
             );
 
-        if (
-            Number.isFinite(value) &&
-            value >= best.value
-        ) {
+        if (value > best.value) {
             best = {
                 value,
-                target:
-                    Number.isFinite(target)
-                        ? target
-                        : 0,
+                target,
             };
         }
     }
 
     return best;
 }
+
+function safeTarget(
+    item,
+    fallback = 0,
+) {
+    const values = [
+        item?.target,
+        item?.total,
+        item?.required,
+        fallback,
+    ];
+
+    for (const value of values) {
+        const number =
+            Number(value);
+
+        if (
+            Number.isFinite(number) &&
+            number > 0
+        ) {
+            return number;
+        }
+    }
+
+    return 0;
+}
+
+function safeNumber(value) {
+    const number =
+        Number(value);
+
+    if (
+        !Number.isFinite(number) ||
+        number < 0
+    ) {
+        return 0;
+    }
+
+    return number;
+}
+
+/* ------------------------------------------------ */
+/* REWARD                                           */
+/* ------------------------------------------------ */
 
 function getRewardInfo(quest) {
     const rewards =
@@ -693,7 +811,9 @@ function getRewardInfo(quest) {
         rewards[0];
 
     const amount =
-        Number(reward?.orb_quantity);
+        Number(
+            reward?.orb_quantity,
+        );
 
     return {
         name:
@@ -708,6 +828,10 @@ function getRewardInfo(quest) {
     };
 }
 
+/* ------------------------------------------------ */
+/* API RESPONSE                                     */
+/* ------------------------------------------------ */
+
 function extractStatus(res) {
     if (
         res &&
@@ -719,6 +843,10 @@ function extractStatus(res) {
 
     return res;
 }
+
+/* ------------------------------------------------ */
+/* HELPERS                                          */
+/* ------------------------------------------------ */
 
 function formatNumber(value) {
     const number =
@@ -736,7 +864,10 @@ function formatNumber(value) {
 function escapeMarkdown(value) {
     return String(value ?? '')
         .replace(/\\/g, '\\\\')
-        .replace(/([*_~`|>])/g, '\\$1');
+        .replace(
+            /([*_~`|>])/g,
+            '\\$1',
+        );
 }
 
 function timeout(ms) {
@@ -745,4 +876,6 @@ function timeout(ms) {
     });
 }
 
-export { QuestTaskConfigType };
+export {
+    QuestTaskConfigType,
+};
