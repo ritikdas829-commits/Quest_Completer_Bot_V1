@@ -18,7 +18,6 @@ const QuestTaskConfigType = {
 export class QuestManager {
     #quests = new Map();
     client;
-    static activeSessionMessage = null;
 
     constructor(client, quests = []) {
         this.client = client;
@@ -120,8 +119,9 @@ export class QuestManager {
         } catch {}
     }
 
-    static async updateSessionBox(channel, questList) {
-        if (!channel) return;
+    // अब यह मेथड हर यूजर के लिए अलग मैसेज ट्रैक करेगा और नया मैसेज भेजेगा या एडिट करेगा
+    static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }) {
+        if (!channel) return sessionMessageRef.msg;
         try {
             let description = '';
             let completedCount = 0;
@@ -167,18 +167,20 @@ export class QuestManager {
                 .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner' })
                 .setTimestamp();
 
-            if (QuestManager.activeSessionMessage) {
-                await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(async () => {
-                    QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+            if (sessionMessageRef.msg) {
+                await sessionMessageRef.msg.edit({ embeds: [embed] }).catch(async () => {
+                    sessionMessageRef.msg = await channel.send({ embeds: [embed] }).catch(() => null);
                 });
             } else {
-                QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+                sessionMessageRef.msg = await channel.send({ embeds: [embed] }).catch(() => null);
             }
-        } catch (err) {}
+            return sessionMessageRef.msg;
+        } catch (err) {
+            return sessionMessageRef.msg;
+        }
     }
 
-    async doingQuest(quest, channel = null, userId = null, allQuests = []) {
-        const questName = quest.config.messages.quest_name;
+    async doingQuest(quest, channel = null, userId = null, allQuests = [], sessionMessageRef = { msg: null }) {
         const isAndroid =
             Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO_ON_MOBILE) &&
             !Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO);
@@ -204,7 +206,7 @@ export class QuestManager {
         const intervalTimer = setInterval(async () => {
             await this.#refreshQuestStatus(quest);
             if (channel && allQuests.length > 0) {
-                QuestManager.updateSessionBox(channel, allQuests);
+                await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
             }
         }, 20000);
 
@@ -230,7 +232,7 @@ export class QuestManager {
                         const res = await this.client.post(`/quests/${quest.id}/video-progress`, payload);
                         if (res) quest.updateUserStatus(extractStatus(res));
 
-                        if (channel) QuestManager.updateSessionBox(channel, allQuests);
+                        if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
                         if (quest.isCompleted()) break;
 
                         secondsDone += Math.min(10, Math.max(5, Math.floor(targetSecs / 4)));
@@ -268,7 +270,7 @@ export class QuestManager {
                         continue;
                     }
 
-                    if (channel) QuestManager.updateSessionBox(channel, allQuests);
+                    if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
 
                     const done = readProgress(quest, eventName, taskName);
                     if (done >= secondsNeeded || quest.isCompleted()) break;
@@ -290,7 +292,7 @@ export class QuestManager {
         }
 
         if (channel) {
-            QuestManager.updateSessionBox(channel, allQuests);
+            await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
         }
 
         return true;
@@ -323,4 +325,4 @@ function readProgress(quest, eventName, taskName) {
         }
     }
     return Number(val) || 0;
-    }
+}
