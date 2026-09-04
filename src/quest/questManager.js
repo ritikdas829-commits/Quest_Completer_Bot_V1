@@ -1,374 +1,212 @@
 import { Quest } from './quest.js';
 import { EmbedBuilder } from 'discord.js';
-import {
-    detectTask,
-    getProgressInfo,
-    readProgressForAction,
-    getRewardInfo,
-    extractStatus,
-    formatNumber,
-    escapeMarkdown,
-    timeout,
-} from './questHelper.js';
 
 const QuestTaskConfigType = {
-    WATCH_VIDEO: 'WATCH_VIDEO',
-    PLAY_ON_DESKTOP: 'PLAY_ON_DESKTOP',
-    STREAM_ON_DESKTOP: 'STREAM_ON_DESKTOP',
-    PLAY_ACTIVITY: 'PLAY_ACTIVITY',
+    WATCH_VIDEO:           'WATCH_VIDEO',
+    PLAY_ON_DESKTOP:       'PLAY_ON_DESKTOP',
+    STREAM_ON_DESKTOP:     'STREAM_ON_DESKTOP',
+    PLAY_ACTIVITY:         'PLAY_ACTIVITY',
     WATCH_VIDEO_ON_MOBILE: 'WATCH_VIDEO_ON_MOBILE',
     WATCH_VIDEO_BY_STREAM: 'WATCH_VIDEO_BY_STREAM',
-    LEARN_MORE: 'LEARN_MORE',
-    WATCH_VIDEO_EMBED: 'WATCH_VIDEO_EMBED',
-    PLAY_ON_XBOX: 'PLAY_ON_XBOX',
-    PLAY_ON_PLAYSTATION: 'PLAY_ON_PLAYSTATION',
+    LEARN_MORE:            'LEARN_MORE',
+    WATCH_VIDEO_EMBED:     'WATCH_VIDEO_EMBED',
+    PLAY_ON_XBOX:          'PLAY_ON_XBOX',
+    PLAY_ON_PLAYSTATION:   'PLAY_ON_PLAYSTATION',
     ACHIEVEMENT_IN_ACTIVITY: 'ACHIEVEMENT_IN_ACTIVITY',
 };
 
 export class QuestManager {
     #quests = new Map();
     client;
-
     static activeSessionMessage = null;
-    static #updateLock = Promise.resolve();
 
     constructor(client, quests = []) {
         this.client = client;
-        for (const quest of quests) {
-            if (quest?.id) {
-                this.#quests.set(quest.id, quest);
-            }
-        }
+        quests.forEach((quest) => this.#quests.set(quest.id, quest));
     }
 
     static fromResponse(client, response) {
-        if (!response) {
-            throw new Error('Invalid quest response.');
-        }
-
         if (response.quest_enrollment_blocked_until !== null) {
             throw new Error(
                 `Quest enrollment is blocked until ${response.quest_enrollment_blocked_until}.`,
             );
         }
-
         return new QuestManager(
             client,
-            Array.isArray(response.quests)
-                ? response.quests.map((quest) => Quest.create(quest))
-                : [],
+            response.quests.map((quest) => Quest.create(quest)),
         );
     }
 
-    [Symbol.iterator]() {
-        return this.#quests.values();
-    }
-
-    get size() {
-        return this.#quests.size;
-    }
-
-    list() {
-        return Array.from(this.#quests.values());
-    }
-
-    get(id) {
-        return this.#quests.get(id);
-    }
-
-    upsert(quest) {
-        if (!quest?.id) return false;
-        this.#quests.set(quest.id, quest);
-        return true;
-    }
-
-    remove(id) {
-        return this.#quests.delete(id);
-    }
-
-    clear() {
-        this.#quests.clear();
-    }
-
-    hasQuest(id) {
-        return this.#quests.has(id);
-    }
+    [Symbol.iterator]() { return this.#quests.values(); }
+    get size() { return this.#quests.size; }
+    list() { return Array.from(this.#quests.values()); }
+    get(id) { return this.#quests.get(id); }
+    upsert(quest) { this.#quests.set(quest.id, quest); }
+    remove(id) { return this.#quests.delete(id); }
+    clear() { this.#quests.clear(); }
+    hasQuest(id) { return this.#quests.has(id); }
 
     getExpired(date = new Date()) {
         return this.list().filter((q) => q.isExpired(date));
     }
-
     getCompleted() {
         return this.list().filter((q) => q.isCompleted());
     }
-
     getClaimable() {
-        return this.list().filter(
-            (q) =>
-                q.isCompleted() &&
-                !q.hasClaimedRewards(),
-        );
+        return this.list().filter((q) => q.isCompleted() && !q.hasClaimedRewards());
     }
-
     filterQuestsValid() {
         return this.list().filter(
-            (q) =>
-                !q.isCompleted() &&
-                !q.isExpired(),
+            (q) => !q.isCompleted() && !q.isExpired(),
         );
     }
 
     async claimRewards(logFn) {
-        await this.refreshAll();
+        try {
+            const fresh = await this.client.get('/quests/@me');
+            for (const q of fresh.quests) {
+                const existing = this.#quests.get(q.id);
+                if (existing && q.user_status) existing.updateUserStatus(q.user_status);
+            }
+        } catch {}
 
         const claimable = this.getClaimable();
         let claimed = 0;
-
         for (const quest of claimable) {
             try {
-                const response = await this.client.post(
-                    `/quests/${quest.id}/claim-reward`,
-                    {
-                        location: 11,
-                        is_targeted: false,
-                        metadata_raw: null,
-                    },
-                );
-
-                if (response) {
+                const res = await this.client.post(`/quests/${quest.id}/claim-reward`, {
+                    location: 11,
+                    is_targeted: false,
+                    metadata_raw: null,
+                });
+                if (res) {
                     claimed++;
-                    if (typeof logFn === 'function') {
-                        logFn(`Claimed reward for quest: ${quest.id}`);
-                    }
+                    if (typeof logFn === 'function') logFn(`Claimed reward for quest: ${quest.id}`);
                 }
-
-                await timeout(1500);
-            } catch {
+                await this.#timeout(1500);
+            } catch (err) {
                 continue;
             }
         }
-
         return claimed;
     }
 
     async acceptQuest(questId, isAndroid = false) {
-        if (!questId) return null;
-
         try {
-            const response = await this.client.post(
-                `/quests/${questId}/enroll`,
-                {
-                    location: isAndroid ? 12 : 11,
-                    is_targeted: false,
-                    metadata_raw: null,
-                },
-            );
-
+            const r = await this.client.post(`/quests/${questId}/enroll`, {
+                location: isAndroid ? 12 : 11,
+                is_targeted: false,
+                metadata_raw: null,
+            });
             const quest = this.get(questId);
-
-            if (quest && response) {
-                const status = extractStatus(response);
-                if (status) {
-                    quest.updateUserStatus(status);
-                }
+            if (quest && r) {
+                quest.updateUserStatus(extractStatus(r));
             }
-
-            return quest ?? null;
-        } catch {
+            return quest;
+        } catch (err) {
             return null;
         }
     }
 
-    async refreshQuest(quest) {
-        if (!quest?.id) return false;
-
-        try {
-            const response = await this.client.get('/quests/@me');
-            if (!Array.isArray(response?.quests)) {
-                return false;
-            }
-
-            const updated = response.quests.find((q) => q.id === quest.id);
-            if (!updated) {
-                return false;
-            }
-
-            if (updated.user_status) {
-                quest.updateUserStatus(updated.user_status);
-            }
-
-            return true;
-        } catch {
-            return false;
-        }
+    #timeout(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    async refreshAll() {
+    async #refreshQuestStatus(quest) {
         try {
-            const response = await this.client.get('/quests/@me');
-            if (!Array.isArray(response?.quests)) {
-                return false;
-            }
-
-            for (const data of response.quests) {
-                const existing = this.#quests.get(data.id);
-                if (existing && data.user_status) {
-                    existing.updateUserStatus(data.user_status);
-                }
-            }
-
-            return true;
-        } catch {
-            return false;
-        }
+            const fresh = await this.client.get('/quests/@me');
+            const updated = fresh.quests.find((q) => q.id === quest.id);
+            if (updated?.user_status) quest.updateUserStatus(updated.user_status);
+        } catch {}
     }
 
-    static async updateSessionBox(channel, questList = []) {
+    static async updateSessionBox(channel, questList) {
         if (!channel) return;
+        try {
+            let description = '';
+            let completedCount = 0;
+            let totalOrbsEarned = 0;
 
-        QuestManager.#updateLock = QuestManager.#updateLock
-            .catch(() => {})
-            .then(async () => {
-                await QuestManager.#renderSessionBox(channel, questList);
+            questList.forEach((q) => {
+                if (q.isCompleted()) completedCount++;
             });
 
-        return QuestManager.#updateLock;
-    }
+            const totalQuests = questList.length;
 
-    static async #renderSessionBox(channel, questList) {
-        const quests = Array.isArray(questList) ? questList.filter(Boolean) : [];
+            questList.forEach((q) => {
+                const qName = q.config.messages.quest_name;
+                let rewardText = 'Orbs';
+                let orbAmount = 240;
 
-        let completedCount = 0;
-        let totalOrbs = 0;
-        const sections = [];
+                const rewards = q.config.rewards_config?.rewards;
+                if (rewards && rewards.length > 0) {
+                    rewardText = rewards[0].messages?.name || 'Orbs';
+                    if (rewards[0].orb_quantity) orbAmount = rewards[0].orb_quantity;
+                }
 
-        for (const quest of quests) {
-            const name = quest.config?.messages?.quest_name || 'Unknown Quest';
-            const completed = Boolean(quest.isCompleted?.());
+                if (q.isCompleted()) {
+                    totalOrbsEarned += orbAmount;
+                }
 
-            if (completed) {
-                completedCount++;
+                let status = q.isCompleted() ? '🟢 **COMPLETED**' : '⏳ **IN PROGRESS**';
+
+                description += `◆ **${qName}**\n` +
+                               `├ 🎁 **Reward:** \`${rewardText}\`\n` +
+                               `└ ⚡ **Status:** ${status}\n\n`;
+            });
+
+            const headerText = `┏━━━ 🤖 **AI NEURAL • PIPELINE V4** 🤖 ━━━┓\n` +
+                               `┃ 📊 **Progress:** \`${completedCount} / ${totalQuests} Done\`\n` +
+                               `┃ 💎 **Total Orbs:** \`${totalOrbsEarned} Orbs\`\n` +
+                               `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`;
+
+            const embed = new EmbedBuilder()
+                .setColor(completedCount === totalQuests ? '#00FF66' : '#9b59b6')
+                .setTitle('🧠 AI Autonomous Quest Execution Dashboard')
+                .setDescription(`${headerText}\n\n${description.trim()}`)
+                .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner' })
+                .setTimestamp();
+
+            if (QuestManager.activeSessionMessage) {
+                await QuestManager.activeSessionMessage.edit({ embeds: [embed] }).catch(async () => {
+                    QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
+                });
+            } else {
+                QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] }).catch(() => {});
             }
-
-            const reward = getRewardInfo(quest);
-            if (completed) {
-                totalOrbs += reward.amount;
-            }
-
-            const task = detectTask(quest);
-            const progress = getProgressInfo(quest, task);
-
-            let status = '⏳ **WAITING**';
-            if (completed) {
-                status = '🟢 **COMPLETED**';
-            } else if (progress.value > 0) {
-                status = '🟡 **IN PROGRESS**';
-            }
-
-            const progressText = progress.target > 0
-                ? `\`${formatNumber(progress.value)} / ${formatNumber(progress.target)}\``
-                : '`Waiting for server data`';
-
-            const taskText = task?.name ? `\`${task.name}\`` : '`Unknown`';
-
-            sections.push(
-                [
-                    `◆ **${escapeMarkdown(name)}**`,
-                    `├ 🎯 **Task:** ${taskText}`,
-                    `├ 🎁 **Reward:** \`${escapeMarkdown(reward.name)}${reward.amount > 0 ? ` • ${reward.amount}` : ''}\``,
-                    `├ 📈 **Progress:** ${progressText}`,
-                    `└ ⚡ **Status:** ${status}`,
-                ].join('\n'),
-            );
-        }
-
-        const total = quests.length;
-        const percentage = total > 0 ? Math.round((completedCount / total) * 100) : 0;
-        const allCompleted = total > 0 && completedCount === total;
-
-        const header = [
-            '┏━━━ 🤖 **QUEST PIPELINE V6** 🤖 ━━━┓',
-            `┃ 📊 **Progress:** \`${completedCount} / ${total} Done\``,
-            `┃ 📈 **Completion:** \`${percentage}%\``,
-            `┃ 💎 **Earned:** \`${formatNumber(totalOrbs)} Orbs\``,
-            `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`,
-        ].join('\n');
-
-        const dashboardStatus = allCompleted
-            ? '🟢 **ALL QUESTS COMPLETED**'
-            : '🟣 **QUEST PIPELINE ACTIVE**';
-
-        const embed = new EmbedBuilder()
-            .setColor(allCompleted ? '#00FF66' : '#9b59b6')
-            .setTitle('🧠 Quest Progress Dashboard')
-            .setDescription(
-                [
-                    header,
-                    '',
-                    dashboardStatus,
-                    '',
-                    sections.length > 0 ? sections.join('\n\n') : '⏳ No quests found.',
-                ].join('\n'),
-            )
-            .setFooter({ text: 'InSaNe DyNaStY • Live Quest Monitor' })
-            .setTimestamp();
-
-        if (QuestManager.activeSessionMessage) {
-            try {
-                await QuestManager.activeSessionMessage.edit({ embeds: [embed] });
-                return;
-            } catch {
-                QuestManager.activeSessionMessage = null;
-            }
-        }
-
-        try {
-            QuestManager.activeSessionMessage = await channel.send({ embeds: [embed] });
-        } catch {
-            QuestManager.activeSessionMessage = null;
-        }
-    }
-
-    static resetSessionMessage() {
-        QuestManager.activeSessionMessage = null;
+        } catch (err) {}
     }
 
     async doingQuest(quest, channel = null, userId = null, allQuests = []) {
-        if (!quest) return false;
-
-        const task = detectTask(quest);
-        if (!task) {
-            if (channel) {
-                await QuestManager.updateSessionBox(channel, allQuests);
-            }
-            return false;
-        }
-
-        const isAndroid = task.name === QuestTaskConfigType.WATCH_VIDEO_ON_MOBILE;
+        const questName = quest.config.messages.quest_name;
+        const isAndroid =
+            Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO_ON_MOBILE) &&
+            !Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO);
 
         if (!quest.isEnrolledQuest()) {
             const enrolled = await this.acceptQuest(quest.id, isAndroid);
-            if (!enrolled) {
-                return false;
-            }
-            await timeout(1000);
+            if (!enrolled) return false;
+            await this.#timeout(1000);
         }
 
-        await this.refreshQuest(quest);
-        if (channel) {
-            await QuestManager.updateSessionBox(channel, allQuests);
-        }
+        const taskConfig = quest.config.task_config ?? quest.config.task_config_v2;
+        if (!taskConfig || !taskConfig.tasks) return false;
 
-        const taskName = task.name;
-        const eventName = task.eventName;
-        const targetSecs = task.target > 0 ? task.target : 30;
+        const tasks = taskConfig.tasks ?? {};
+        const availableTaskTypes = Object.keys(tasks);
+        if (availableTaskTypes.length === 0) return false;
 
-        const refreshTimer = setInterval(async () => {
-            await this.refreshQuest(quest);
-            if (channel) {
-                await QuestManager.updateSessionBox(channel, allQuests);
+        const taskName = availableTaskTypes[0];
+        const task = tasks[taskName];
+        const secondsNeeded = task?.target || task?.seconds || 30;
+        const eventName = task?.event_name ?? task?.type ?? taskName;
+
+        const intervalTimer = setInterval(async () => {
+            await this.#refreshQuestStatus(quest);
+            if (channel && allQuests.length > 0) {
+                QuestManager.updateSessionBox(channel, allQuests);
             }
-        }, 10000);
+        }, 20000);
 
         try {
             if (
@@ -377,38 +215,42 @@ export class QuestManager {
                 taskName.includes('LEARN') || 
                 taskName.includes('EMBED')
             ) {
-                let secondsDone = readProgressForAction(quest, eventName, taskName);
+                const currentTaskId = taskName;
+                let secondsDone = readProgress(quest, eventName, taskName);
+                const targetSecs = secondsNeeded > 0 ? secondsNeeded : 30;
 
                 while (!quest.isCompleted() && secondsDone <= targetSecs) {
                     try {
                         const payload = {
                             timestamp: secondsDone,
-                            task_id: taskName,
+                            task_id: currentTaskId,
                         };
                         if (eventName) payload.event_name = eventName;
 
                         const res = await this.client.post(`/quests/${quest.id}/video-progress`, payload);
                         if (res) quest.updateUserStatus(extractStatus(res));
 
-                        if (channel) await QuestManager.updateSessionBox(channel, allQuests);
+                        if (channel) QuestManager.updateSessionBox(channel, allQuests);
                         if (quest.isCompleted()) break;
 
                         secondsDone += Math.min(10, Math.max(5, Math.floor(targetSecs / 4)));
                         if (secondsDone > targetSecs) secondsDone = targetSecs;
-                    } catch {}
-                    await timeout(2000);
+                    } catch (err) {}
+                    await this.#timeout(2000);
                 }
 
                 try {
                     const finalRes = await this.client.post(`/quests/${quest.id}/video-progress`, {
                         timestamp: targetSecs,
-                        task_id: taskName,
+                        task_id: currentTaskId,
                     });
                     if (finalRes) quest.updateUserStatus(extractStatus(finalRes));
                 } catch {}
 
+                await this.#refreshQuestStatus(quest);
+
             } else {
-                const maxDurationMs = (targetSecs + 300) * 1000;
+                const maxDurationMs = (secondsNeeded + 300) * 1000;
                 const startTime = Date.now();
 
                 while (!quest.isCompleted()) {
@@ -421,38 +263,64 @@ export class QuestManager {
                             terminal: false 
                         });
                         if (res) quest.updateUserStatus(extractStatus(res));
-                    } catch {
-                        await timeout(3000);
+                    } catch (err) {
+                        await this.#timeout(3000);
                         continue;
                     }
 
-                    if (channel) await QuestManager.updateSessionBox(channel, allQuests);
+                    if (channel) QuestManager.updateSessionBox(channel, allQuests);
 
-                    const done = readProgressForAction(quest, eventName, taskName);
-                    if (done >= targetSecs || quest.isCompleted()) break;
-
-                    await timeout(4000);
+                    const done = readProgress(quest, eventName, taskName);
+                    if (done >= secondsNeeded || quest.isCompleted()) break;
+                    
+                    await this.#timeout(4000);
                 }
 
                 try {
-                    await this.client.post(`/quests/${quest.id}/heartbeat`, { 
+                    const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { 
                         application_id: quest.config.application?.id,
                         stream_key: null, 
                         terminal: true 
                     });
+                    if (res) quest.updateUserStatus(extractStatus(res));
                 } catch {}
             }
         } finally {
-            clearInterval(refreshTimer);
+            clearInterval(intervalTimer);
         }
 
-        await this.refreshQuest(quest);
         if (channel) {
-            await QuestManager.updateSessionBox(channel, allQuests);
+            QuestManager.updateSessionBox(channel, allQuests);
         }
 
-        return Boolean(quest.isCompleted());
+        return true;
     }
 }
 
-export { QuestTaskConfigType };
+function extractStatus(res) {
+    if (res && typeof res === 'object' && 'user_status' in res && res.user_status) {
+        return res.user_status;
+    }
+    return res;
+}
+
+function readProgress(quest, eventName, taskName) {
+    const progress = quest.userStatus?.progress;
+    if (!progress) return 0;
+    
+    let val = 0;
+    if (eventName && progress[eventName]?.value != null) {
+        val = progress[eventName].value;
+    } else if (taskName && progress[taskName]?.value != null) {
+        val = progress[taskName].value;
+    } else {
+        const keys = Object.keys(progress);
+        for (const k of keys) {
+            if (progress[k]?.value != null) {
+                val = progress[k].value;
+                break;
+            }
+        }
+    }
+    return Number(val) || 0;
+    }
