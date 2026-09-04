@@ -60,12 +60,32 @@ export class QuestManager {
         );
     }
 
+    // रेट-लिमिट और एरर से निपटने के लिए सेफ़्फ़र रिक्वेस्ट हेल्पर
+    async #safeRequest(requestFn, retries = 3, delay = 3000) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                return await requestFn();
+            } catch (err) {
+                // यदि रेट-लिमिट (429) है या आखिरी प्रयास नहीं बचा है तो रुककर दोबारा कोशिश करें
+                const isRateLimit = err?.status === 429 || err?.response?.status === 429;
+                if (i === retries - 1) {
+                    throw err;
+                }
+                // अगर 429 एरर है तो थोड़ा ज्यादा समय (जैसे 5 सेकंड) या नॉर्मल डिले रखें
+                const waitTime = isRateLimit ? 5000 : delay;
+                await this.#timeout(waitTime);
+            }
+        }
+    }
+
     async claimRewards(logFn) {
         try {
-            const fresh = await this.client.get('/quests/@me');
-            for (const q of fresh.quests) {
-                const existing = this.#quests.get(q.id);
-                if (existing && q.user_status) existing.updateUserStatus(q.user_status);
+            const fresh = await this.#safeRequest(() => this.client.get('/quests/@me'));
+            if (fresh && fresh.quests) {
+                for (const q of fresh.quests) {
+                    const existing = this.#quests.get(q.id);
+                    if (existing && q.user_status) existing.updateUserStatus(q.user_status);
+                }
             }
         } catch {}
 
@@ -73,11 +93,13 @@ export class QuestManager {
         let claimed = 0;
         for (const quest of claimable) {
             try {
-                const res = await this.client.post(`/quests/${quest.id}/claim-reward`, {
-                    location: 11,
-                    is_targeted: false,
-                    metadata_raw: null,
-                });
+                const res = await this.#safeRequest(() => 
+                    this.client.post(`/quests/${quest.id}/claim-reward`, {
+                        location: 11,
+                        is_targeted: false,
+                        metadata_raw: null,
+                    })
+                );
                 if (res) {
                     claimed++;
                     if (typeof logFn === 'function') logFn(`Claimed reward for quest: ${quest.id}`);
@@ -92,11 +114,13 @@ export class QuestManager {
 
     async acceptQuest(questId, isAndroid = false) {
         try {
-            const r = await this.client.post(`/quests/${questId}/enroll`, {
-                location: isAndroid ? 12 : 11,
-                is_targeted: false,
-                metadata_raw: null,
-            });
+            const r = await this.#safeRequest(() => 
+                this.client.post(`/quests/${questId}/enroll`, {
+                    location: isAndroid ? 12 : 11,
+                    is_targeted: false,
+                    metadata_raw: null,
+                })
+            );
             const quest = this.get(questId);
             if (quest && r) {
                 quest.updateUserStatus(extractStatus(r));
@@ -113,13 +137,15 @@ export class QuestManager {
 
     async #refreshQuestStatus(quest) {
         try {
-            const fresh = await this.client.get('/quests/@me');
-            const updated = fresh.quests.find((q) => q.id === quest.id);
-            if (updated?.user_status) quest.updateUserStatus(updated.user_status);
+            const fresh = await this.#safeRequest(() => this.client.get('/quests/@me'));
+            if (fresh && fresh.quests) {
+                const updated = fresh.quests.find((q) => q.id === quest.id);
+                if (updated?.user_status) quest.updateUserStatus(updated.user_status);
+            }
         } catch {}
     }
 
-    // अब यह मेथड हर यूजर के लिए अलग मैसेज ट्रैक करेगा और नया मैसेज भेजेगा या एडिट करेगा
+    // यूजर-स्पेसिफिक डैशबोर्ड अपडेट मेथड
     static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }) {
         if (!channel) return sessionMessageRef.msg;
         try {
@@ -204,10 +230,12 @@ export class QuestManager {
         const eventName = task?.event_name ?? task?.type ?? taskName;
 
         const intervalTimer = setInterval(async () => {
-            await this.#refreshQuestStatus(quest);
-            if (channel && allQuests.length > 0) {
-                await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
-            }
+            try {
+                await this.#refreshQuestStatus(quest);
+                if (channel && allQuests.length > 0) {
+                    await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
+                }
+            } catch {}
         }, 20000);
 
         try {
@@ -229,7 +257,9 @@ export class QuestManager {
                         };
                         if (eventName) payload.event_name = eventName;
 
-                        const res = await this.client.post(`/quests/${quest.id}/video-progress`, payload);
+                        const res = await this.#safeRequest(() => 
+                            this.client.post(`/quests/${quest.id}/video-progress`, payload)
+                        );
                         if (res) quest.updateUserStatus(extractStatus(res));
 
                         if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
@@ -237,16 +267,19 @@ export class QuestManager {
 
                         secondsDone += Math.min(10, Math.max(5, Math.floor(targetSecs / 4)));
                         if (secondsDone > targetSecs) secondsDone = targetSecs;
-                    } catch (err) {}
+                    } catch (err) {
+                        await this.#timeout(3000);
+                    }
                     await this.#timeout(2000);
                 }
 
                 try {
-                    const finalRes = await this.client.post(`/quests/${quest.id}/video-progress`, {
-                        timestamp: targetSecs,
-                        task_id: currentTaskId,
-                    });
-                    if (finalRes) quest.updateUserStatus(extractStatus(finalRes));
+                    await this.#safeRequest(() => 
+                        this.client.post(`/quests/${quest.id}/video-progress`, {
+                            timestamp: targetSecs,
+                            task_id: currentTaskId,
+                        })
+                    );
                 } catch {}
 
                 await this.#refreshQuestStatus(quest);
@@ -259,14 +292,16 @@ export class QuestManager {
                     if (Date.now() - startTime > maxDurationMs) break;
 
                     try {
-                        const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { 
-                            application_id: quest.config.application?.id,
-                            stream_key: null, 
-                            terminal: false 
-                        });
+                        const res = await this.#safeRequest(() => 
+                            this.client.post(`/quests/${quest.id}/heartbeat`, { 
+                                application_id: quest.config.application?.id,
+                                stream_key: null, 
+                                terminal: false 
+                            })
+                        );
                         if (res) quest.updateUserStatus(extractStatus(res));
                     } catch (err) {
-                        await this.#timeout(3000);
+                        await this.#timeout(4000);
                         continue;
                     }
 
@@ -279,12 +314,13 @@ export class QuestManager {
                 }
 
                 try {
-                    const res = await this.client.post(`/quests/${quest.id}/heartbeat`, { 
-                        application_id: quest.config.application?.id,
-                        stream_key: null, 
-                        terminal: true 
-                    });
-                    if (res) quest.updateUserStatus(extractStatus(res));
+                    await this.#safeRequest(() => 
+                        this.client.post(`/quests/${quest.id}/heartbeat`, { 
+                            application_id: quest.config.application?.id,
+                            stream_key: null, 
+                            terminal: true 
+                        })
+                    );
                 } catch {}
             }
         } finally {
