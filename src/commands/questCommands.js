@@ -231,11 +231,17 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
         const valid = manager.filterQuestsValid();
         if (valid.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return false; }
 
-        QuestManager.activeSessionMessage = null;
-        await QuestManager.updateSessionBox(channel, valid);
+        let userName = 'User';
+        try {
+            const fetchedUser = await discordClient?.users?.fetch(userId);
+            if (fetchedUser) userName = fetchedUser.global_name || fetchedUser.username || 'User';
+        } catch {}
+
+        const sessionRef = { msg: null };
+        sessionRef.msg = await QuestManager.updateSessionBox(channel, valid, sessionRef, userName);
 
         for (const quest of valid) {
-            await manager.doingQuest(quest, channel, userId, valid);
+            await manager.doingQuest(quest, channel, userId, valid, sessionRef, userName);
         }
 
         await manager.claimRewards(console.log).catch(() => 0);
