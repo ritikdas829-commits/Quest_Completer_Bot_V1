@@ -66,7 +66,7 @@ global.AUTO_ROLE_ID = null;
 client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
-    client.user.setActivity('Quest Completer V3 | /help', { type: ActivityType.Watching });
+    client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
     
     client.guilds.cache.forEach(async (guild) => {
         try {
@@ -96,47 +96,56 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Standard Interaction & Button Handler
-client.on('interactionCreate', async (interaction) => {
-    if (interaction.isButton()) {
-        if (interaction.customId === 'refresh_status') {
-            const access = await checkCommandAccess(interaction.user, interaction.member);
-            
-            const updatedEmbed = new EmbedBuilder()
-                .setColor(access.allowed ? '#00FFCC' : '#FF3366')
-                .setTitle('🛡️ Quest Status & Invite Verification (V3)')
-                .setDescription(access.allowed 
-                    ? `🎉 **Access Granted!** Status refreshed successfully.` 
-                    : access.message)
-                .setTimestamp()
-                .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+// Message Handler (Prefix Commands) - Strict single execution
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
-            await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
-        } 
-        else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
-            await handlePlatformButton(interaction);
-        }
-        return;
-    }
+    const prefix = '.'; 
+    
+    if (message.content.startsWith(prefix)) {
+        const args = message.content.slice(prefix.length).trim().split(/ +/);
+        const commandName = args.shift().toLowerCase();
 
-    if (!interaction.isChatInputCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-
-    try {
-        await command.execute(interaction, client);
-    } catch (error) {
-        console.error(error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
-        } else {
-            await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
+        const command = client.prefixCommands.get(commandName);
+        if (command) {
+            try {
+                if (command.prefixExecute) {
+                    await command.prefixExecute(message, args, client);
+                } else {
+                    await command.execute(message, client);
+                }
+            } catch (error) {
+                console.error(error);
+                await message.reply('There was an error executing that command!').catch(() => {});
+            }
+            return;
         }
     }
 });
 
-// Clean Command Loader
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'refresh_status') {
+        const access = await checkCommandAccess(interaction.user, interaction.member);
+        
+        const updatedEmbed = new EmbedBuilder()
+            .setColor(access.allowed ? '#00FFCC' : '#FF3366')
+            .setTitle('🛡️ Quest Status & Invite Verification (V3)')
+            .setDescription(access.allowed 
+                ? `🎉 **Access Granted!** Status refreshed successfully.` 
+                : access.message)
+            .setTimestamp()
+            .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+
+        await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
+    } 
+    else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
+        await handlePlatformButton(interaction);
+    }
+});
+
+// Clean and safe command loader
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
@@ -145,6 +154,9 @@ for (const file of commandFiles) {
         const cmd = mod.default;
         if (cmd?.data?.name) {
             client.commands.set(cmd.data.name, cmd);
+        }
+        if (cmd?.prefix) {
+            client.prefixCommands.set(cmd.prefix, cmd);
         }
     }
 }
@@ -170,3 +182,4 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
+
