@@ -35,19 +35,23 @@ export class Quest {
         this.#data.user_status = userStatus;
     }
 
-    // Yeh method check karega ki quest ke andar valid aur supported tasks maujud hain ya nahi
+    // Updated with all 11 supported task types from QuestManager config
     isValidQuest() {
         const tasks = (this.#data.config?.task_config ?? this.#data.config?.task_config_v2)?.tasks;
         if (!tasks) return false;
         
         const supportedTypes = [
-            'PLAY_ON_DESKTOP',
             'WATCH_VIDEO',
+            'PLAY_ON_DESKTOP',
             'STREAM_ON_DESKTOP',
             'PLAY_ACTIVITY',
             'WATCH_VIDEO_ON_MOBILE',
+            'WATCH_VIDEO_BY_STREAM',
             'LEARN_MORE',
-            'WATCH_VIDEO_EMBED'
+            'WATCH_VIDEO_EMBED',
+            'PLAY_ON_XBOX',
+            'PLAY_ON_PLAYSTATION',
+            'ACHIEVEMENT_IN_ACTIVITY'
         ];
 
         return Object.keys(tasks).some(type => supportedTypes.includes(type));
