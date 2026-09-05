@@ -96,7 +96,7 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands) - Strict single execution
+// Safe & Smart Prefix Message Handler
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -106,16 +106,17 @@ client.on('messageCreate', async (message) => {
         const args = message.content.slice(prefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
 
-        const command = client.prefixCommands.get(commandName);
+        const command = client.prefixCommands.get(commandName) || client.commands.get(commandName);
         if (command) {
             try {
-                if (command.prefixExecute) {
+                if (typeof command.prefixExecute === 'function') {
                     await command.prefixExecute(message, args, client);
-                } else {
+                } else if (typeof command.execute === 'function') {
+                    // Safe execution wrapper for slash-based commands used via prefix
                     await command.execute(message, client);
                 }
             } catch (error) {
-                console.error(error);
+                console.error(`Error executing prefix command ${commandName}:`, error);
                 await message.reply('There was an error executing that command!').catch(() => {});
             }
             return;
@@ -124,28 +125,45 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
+    if (interaction.isButton()) {
+        if (interaction.customId === 'refresh_status') {
+            const access = await checkCommandAccess(interaction.user, interaction.member);
+            
+            const updatedEmbed = new EmbedBuilder()
+                .setColor(access.allowed ? '#00FFCC' : '#FF3366')
+                .setTitle('🛡️ Quest Status & Invite Verification (V3)')
+                .setDescription(access.allowed 
+                    ? `🎉 **Access Granted!** Status refreshed successfully.` 
+                    : access.message)
+                .setTimestamp()
+                .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
 
-    if (interaction.customId === 'refresh_status') {
-        const access = await checkCommandAccess(interaction.user, interaction.member);
-        
-        const updatedEmbed = new EmbedBuilder()
-            .setColor(access.allowed ? '#00FFCC' : '#FF3366')
-            .setTitle('🛡️ Quest Status & Invite Verification (V3)')
-            .setDescription(access.allowed 
-                ? `🎉 **Access Granted!** Status refreshed successfully.` 
-                : access.message)
-            .setTimestamp()
-            .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+            await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
+        } 
+        else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
+            await handlePlatformButton(interaction);
+        }
+        return;
+    }
 
-        await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
-    } 
-    else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
-        await handlePlatformButton(interaction);
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
+
+    try {
+        await command.execute(interaction, client);
+    } catch (error) {
+        console.error(error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
+        } else {
+            await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
+        }
     }
 });
 
-// Clean and safe command loader
+// Auto-register all commands as both slash and prefix commands
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
@@ -154,6 +172,7 @@ for (const file of commandFiles) {
         const cmd = mod.default;
         if (cmd?.data?.name) {
             client.commands.set(cmd.data.name, cmd);
+            client.prefixCommands.set(cmd.data.name, cmd); // Ensures .q, .link, etc. all work
         }
         if (cmd?.prefix) {
             client.prefixCommands.set(cmd.prefix, cmd);
@@ -182,4 +201,3 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
-
