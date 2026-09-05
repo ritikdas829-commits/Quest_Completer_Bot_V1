@@ -142,7 +142,7 @@ export class QuestManager {
         } catch {}
     }
 
-    // Quest Completer V3 - Live Dashboard Generator (Fixed to prevent message spam)
+    // Live Dashboard Generator - Single Message Edition
     static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }, userName = 'User') {
         if (!channel) return sessionMessageRef.msg;
         try {
@@ -209,7 +209,6 @@ export class QuestManager {
                 .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner V3' })
                 .setTimestamp();
 
-            // FIX: Ensure it updates the existing message instead of sending new ones
             if (sessionMessageRef.msg) {
                 try {
                     sessionMessageRef.msg = await sessionMessageRef.msg.edit({ embeds: [embed] });
@@ -381,3 +380,4 @@ function readProgress(quest, eventName, taskName) {
     }
     return Number(val) || 0;
 }
+
