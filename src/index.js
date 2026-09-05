@@ -43,7 +43,7 @@ if (!existsSync('autoquest.json')) writeFileSync('autoquest.json', '[]');
 
 banner();
 
-// Commented out to prevent Railway timeout/SIGTERM crashes on reboot
+// Railway timeout crash से बचने के लिए इसे कमेंट रखा है (कमांड्स पहले से रजिस्टर्ड हैं)
 // await deployCommands(TOKEN, process.env.DISCORD_CLIENT_ID);
 
 const client = new Client({
@@ -60,7 +60,7 @@ client.commands       = new Collection();
 client.prefixCommands = new Collection();
 client.tokenStore     = makeTokenStore(TOKEN);
 
-// 1. Prefix Message Handler (Handles commands like .q, .link)
+// 1. Prefix Message Handler (प्रिफिक्स कमांड्स के लिए जैसे .q, .link)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -85,7 +85,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// 2. Interaction Handler (Handles slash commands / and buttons)
+// 2. Interaction Handler (स्लैश कमांड्स / और बटन्स के लिए)
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -104,22 +104,21 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Command Loader
+// Command Loader (आपके पुराने कोड का स्ट्रक्चर)
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
-    
     // Single default export
     if (mod.default) {
         const cmd = mod.default;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
+        // प्रिफिक्स को डायरेक्ट नाम से भी मैप कर देते हैं ताकि .q या .link सीधे काम करें
         if (cmd?.data?.name) client.prefixCommands.set(cmd.data.name, cmd);
     }
-    
     // Named exports
     for (const [key, cmd] of Object.entries(mod)) {
-        if (['default', 'makeTokenStore', 'handleLinkModal', 'handleLinkPromptButton', 'runAutoquestForUser'].includes(key)) continue;
+        if (key === 'default' || key === 'makeTokenStore' || key === 'handleLinkModal' || key === 'handleLinkPromptButton' || key === 'runAutoquestForUser') continue;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
         if (cmd?.data?.name) client.prefixCommands.set(cmd.data.name, cmd);
@@ -137,7 +136,7 @@ for (const file of eventFiles) {
     }
 }
 
-// Global Crash Handlers to prevent Railway container termination
+// Global Crash Handlers ताकि बोट रेलवे पर क्रैश होकर बंद न हो
 process.on('unhandledRejection', (reason) => {
     console.error('⚠️ Unhandled Rejection:', reason);
 });
@@ -147,4 +146,3 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
-
