@@ -233,9 +233,16 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient, use
         const sessionRef = { msg: null };
         await QuestManager.updateSessionBox(channel, valid, sessionRef, username);
 
-        for (const quest of valid) {
-            await manager.doingQuest(quest, channel, userId, valid, sessionRef, username);
-        }
+        // Promise.allSettled ka use kiya taki error aane par bhi baki quests chalte rahein
+        await Promise.allSettled(
+            valid.map(async (quest) => {
+                try {
+                    await manager.doingQuest(quest, channel, userId, valid, sessionRef, username);
+                } catch (questErr) {
+                    console.error(`Quest error for ${quest.id}:`, questErr?.message);
+                }
+            })
+        );
 
         await manager.claimRewards(console.log).catch(() => 0);
 
@@ -650,4 +657,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest V3:${userId}] Error:`, err?.message);
     }
 }
-
