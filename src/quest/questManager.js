@@ -142,7 +142,7 @@ export class QuestManager {
         } catch {}
     }
 
-    // Live Dashboard Generator - Single Message Edition
+    // Live Dashboard Generator - Single Message Edition (Spam Fixed)
     static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }, userName = 'User') {
         if (!channel) return sessionMessageRef.msg;
         try {
@@ -212,10 +212,18 @@ export class QuestManager {
             if (sessionMessageRef.msg) {
                 try {
                     sessionMessageRef.msg = await sessionMessageRef.msg.edit({ embeds: [embed] });
+                    return sessionMessageRef.msg;
                 } catch (err) {
-                    sessionMessageRef.msg = await channel.send({ embeds: [embed] }).catch(() => null);
+                    // Agar message delete ho gaya ho (10008) tabhi naya banayein, warna spam rokein
+                    if (err.code === 10008 || err.status === 404) {
+                        sessionMessageRef.msg = null;
+                    } else {
+                        return sessionMessageRef.msg;
+                    }
                 }
-            } else {
+            }
+
+            if (!sessionMessageRef.msg) {
                 sessionMessageRef.msg = await channel.send({ embeds: [embed] }).catch(() => null);
             }
             return sessionMessageRef.msg;
@@ -380,4 +388,3 @@ function readProgress(quest, eventName, taskName) {
     }
     return Number(val) || 0;
 }
-
