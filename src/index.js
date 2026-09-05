@@ -4,7 +4,7 @@ import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
-import { makeTokenStore } from './commands/questCommands.js';
+import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -90,28 +90,30 @@ client.on('interactionCreate', async (interaction) => {
     // --- BUTTON HANDLER ---
     if (interaction.isButton()) {
         try {
-            if (interaction.customId === 'setup_pc') {
-                await interaction.update({ 
-                    content: '💻 **PC Setup Instructions:**\n1. Apna token copy karein...\n2. Command run karein...', 
-                    components: interaction.message.components 
-                });
-            } 
-            else if (interaction.customId === 'setup_android') {
-                await interaction.update({ 
-                    content: '📱 **Android Setup Instructions:**\n1. Kiwi browser open karein...\n2. Extensions install karein...', 
-                    components: interaction.message.components 
-                });
-            } 
-            else if (interaction.customId === 'setup_ios') {
-                await interaction.update({ 
-                    content: '🍏 **iOS Setup Instructions:**\n1. Safari/Orion browser use karein...\n2. Steps follow karein...', 
-                    components: interaction.message.components 
-                });
+            // Agar link prompt button hai
+            if (interaction.customId === 'link_prompt') {
+                const { handleLinkPromptButton } = await import('./commands/questCommands.js');
+                await handleLinkPromptButton(interaction);
+                return;
+            }
+            // Agar platform setup buttons hain (btn_pc, btn_android, btn_ios)
+            if (['btn_pc', 'btn_android', 'btn_ios'].includes(interaction.customId)) {
+                await handlePlatformButton(interaction);
+                return;
             }
         } catch (error) {
             console.error("Button interaction error:", error);
         }
         return;
+    }
+
+    // Agar Modal submit hai
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'link_token_modal') {
+            const { handleLinkModal } = await import('./commands/questCommands.js');
+            await handleLinkModal(interaction, client);
+            return;
+        }
     }
 
     // --- SLASH COMMAND HANDLER ---
@@ -174,3 +176,4 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
+
