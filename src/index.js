@@ -96,7 +96,7 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands) - Strict single execution
+// Message Handler (Prefix Commands)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -111,7 +111,7 @@ client.on('messageCreate', async (message) => {
             try {
                 if (command.prefixExecute) {
                     await command.prefixExecute(message, args, client);
-                } else {
+                } else if (command.execute) {
                     await command.execute(message, client);
                 }
             } catch (error) {
@@ -145,7 +145,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Clean and safe command loader (Only Default Export to prevent triple triggers)
+// Fixed Command Loader (Registers both slash commands and maps them as prefix commands automatically)
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
@@ -154,6 +154,7 @@ for (const file of commandFiles) {
         const cmd = mod.default;
         if (cmd?.data?.name) {
             client.commands.set(cmd.data.name, cmd);
+            client.prefixCommands.set(cmd.data.name, cmd); // यह सुनिश्चित करता है कि प्रिफिक्स कमांड काम करे
         }
         if (cmd?.prefix) {
             client.prefixCommands.set(cmd.prefix, cmd);
