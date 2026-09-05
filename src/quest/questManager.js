@@ -60,18 +60,15 @@ export class QuestManager {
         );
     }
 
-    // रेट-लिमिट और एरर से निपटने के लिए सेफ़्फ़र रिक्वेस्ट हेल्पर
     async #safeRequest(requestFn, retries = 3, delay = 3000) {
         for (let i = 0; i < retries; i++) {
             try {
                 return await requestFn();
             } catch (err) {
-                // यदि रेट-लिमिट (429) है या आखिरी प्रयास नहीं बचा है तो रुककर दोबारा कोशिश करें
                 const isRateLimit = err?.status === 429 || err?.response?.status === 429;
                 if (i === retries - 1) {
                     throw err;
                 }
-                // अगर 429 एरर है तो थोड़ा ज्यादा समय (जैसे 5 सेकंड) या नॉर्मल डिले रखें
                 const waitTime = isRateLimit ? 5000 : delay;
                 await this.#timeout(waitTime);
             }
@@ -145,8 +142,8 @@ export class QuestManager {
         } catch {}
     }
 
-    // यूजर-स्पेसिफिक डैशबोर्ड अपडेट मेथड
-    static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }) {
+    // Quest Completer V3 - Live Dashboard Generator with Smart Duration & Progress Bar
+    static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }, userName = 'User') {
         if (!channel) return sessionMessageRef.msg;
         try {
             let description = '';
@@ -174,23 +171,44 @@ export class QuestManager {
                     totalOrbsEarned += orbAmount;
                 }
 
+                // सटीक समय कैलकुलेशन (जैसे 15 min या 29s)
+                const taskConfig = q.config.task_config ?? q.config.task_config_v2;
+                const tasks = taskConfig?.tasks ?? {};
+                const taskName = Object.keys(tasks)[0];
+                const task = tasks[taskName];
+                const targetSecs = task?.target || task?.seconds || 30;
+                
+                // अगर 60 सेकंड से ज्यादा है तो मिनट में दिखाएं, वरना सेकंड्स में
+                const durationFormatted = targetSecs >= 60 ? `${Math.floor(targetSecs / 60)} min` : `${targetSecs}s`;
+
+                const eventName = task?.event_name ?? task?.type ?? taskName;
+                const currentProgress = readProgress(q, eventName, taskName);
+                
+                const percentage = Math.min(100, Math.floor((currentProgress / targetSecs) * 100));
+                const filledBlocks = Math.floor(percentage / 10);
+                const emptyBlocks = 10 - filledBlocks;
+                const progressBar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+
                 let status = q.isCompleted() ? '🟢 **COMPLETED**' : '⏳ **IN PROGRESS**';
 
                 description += `◆ **${qName}**\n` +
                                `├ 🎁 **Reward:** \`${rewardText}\`\n` +
-                               `└ ⚡ **Status:** ${status}\n\n`;
+                               `├ ⚡ **Status:** ${status}\n` +
+                               `├ ⏱️ **Duration:** \`${durationFormatted}\`\n` +
+                               `└ 📈 \`[${progressBar}]\` **${percentage}%**\n\n`;
             });
 
-            const headerText = `┏━━━ 🤖 **AI NEURAL • PIPELINE V4** 🤖 ━━━┓\n` +
+            const headerText = `┏━━━ 🤖 **AI NEURAL • PIPELINE V3** 🤖 ━━━┓\n` +
+                               `┃ 👤 **User:** \`${userName}\`\n` +
                                `┃ 📊 **Progress:** \`${completedCount} / ${totalQuests} Done\`\n` +
                                `┃ 💎 **Total Orbs:** \`${totalOrbsEarned} Orbs\`\n` +
                                `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`;
 
             const embed = new EmbedBuilder()
                 .setColor(completedCount === totalQuests ? '#00FF66' : '#9b59b6')
-                .setTitle('🧠 AI Autonomous Quest Execution Dashboard')
+                .setTitle('🧠 AI Autonomous Quest Execution Dashboard (V3)')
                 .setDescription(`${headerText}\n\n${description.trim()}`)
-                .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner' })
+                .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner V3' })
                 .setTimestamp();
 
             if (sessionMessageRef.msg) {
@@ -206,7 +224,7 @@ export class QuestManager {
         }
     }
 
-    async doingQuest(quest, channel = null, userId = null, allQuests = [], sessionMessageRef = { msg: null }) {
+    async doingQuest(quest, channel = null, userId = null, allQuests = [], sessionMessageRef = { msg: null }, userName = 'User') {
         const isAndroid =
             Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO_ON_MOBILE) &&
             !Boolean(quest.config.task_config_v2?.tasks?.WATCH_VIDEO);
@@ -233,7 +251,7 @@ export class QuestManager {
             try {
                 await this.#refreshQuestStatus(quest);
                 if (channel && allQuests.length > 0) {
-                    await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
+                    await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef, userName);
                 }
             } catch {}
         }, 20000);
@@ -262,7 +280,7 @@ export class QuestManager {
                         );
                         if (res) quest.updateUserStatus(extractStatus(res));
 
-                        if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
+                        if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef, userName);
                         if (quest.isCompleted()) break;
 
                         secondsDone += Math.min(10, Math.max(5, Math.floor(targetSecs / 4)));
@@ -305,7 +323,7 @@ export class QuestManager {
                         continue;
                     }
 
-                    if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
+                    if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef, userName);
 
                     const done = readProgress(quest, eventName, taskName);
                     if (done >= secondsNeeded || quest.isCompleted()) break;
@@ -328,7 +346,7 @@ export class QuestManager {
         }
 
         if (channel) {
-            await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef);
+            await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef, userName);
         }
 
         return true;
