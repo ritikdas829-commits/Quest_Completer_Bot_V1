@@ -3,317 +3,194 @@ import path from 'path';
 
 const dbPath = path.resolve('./invitesData.json');
 
-const REQUIRED_INVITES = 2;
-const MIN_ACCOUNT_AGE_DAYS = 7;
-const REJOIN_COOLDOWN_DAYS = 14;
-const QUEST_ACCESS_ROLE = 'Quest Access';
-
-// =====================================================
-// DATABASE
-// =====================================================
-
 let inviteData = {};
-
 try {
     if (fs.existsSync(dbPath)) {
-        const rawData = fs.readFileSync(dbPath, 'utf8');
-        if (rawData.trim()) {
-            inviteData = JSON.parse(rawData);
-        }
+        inviteData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
     }
-} catch (error) {
-    console.error('❌ Error loading invites database:', error);
-    inviteData = {};
+} catch (err) {
+    console.error("Error loading invites database:", err);
 }
 
 function saveDB() {
     try {
-        fs.writeFileSync(dbPath, JSON.stringify(inviteData, null, 2), 'utf8');
-    } catch (error) {
-        console.error('❌ Error saving invites database:', error);
+        fs.writeFileSync(dbPath, JSON.stringify(inviteData, null, 2));
+    } catch (err) {
+        console.error("Error saving invites database:", err);
     }
 }
-
-// =====================================================
-// INVITE CACHE
-// =====================================================
 
 const invitesCache = new Map();
 
-// =====================================================
-// USER DATA
-// =====================================================
-
-function getUserData(userId) {
-    if (!inviteData[userId]) {
-        inviteData[userId] = {
-            count: 0,
-            invitedUsers: [],
-            leaveHistory: {}
-        };
-    }
-
-    if (!Array.isArray(inviteData[userId].invitedUsers)) {
-        inviteData[userId].invitedUsers = [];
-    }
-
-    if (!inviteData[userId].leaveHistory) {
-        inviteData[userId].leaveHistory = {};
-    }
-
-    inviteData[userId].count = inviteData[userId].invitedUsers.length;
-    return inviteData[userId];
-}
-
-// =====================================================
-// QUEST ACCESS ROLE
-// =====================================================
-
-function getQuestAccessRole(guild) {
-    return guild.roles.cache.find(role => role.name === QUEST_ACCESS_ROLE);
-}
-
-// =====================================================
-// UPDATE QUEST ACCESS (Dynamic Role Management)
-// =====================================================
-
-async function updateQuestAccess(member) {
-    if (!member) return;
-
-    const role = getQuestAccessRole(member.guild);
-    if (!role) {
-        console.error(`❌ "${QUEST_ACCESS_ROLE}" role was not found in ${member.guild.name}`);
-        return;
-    }
-
-    const userData = inviteData[member.id];
-    const count = userData ? userData.count : 0;
-
-    try {
-        if (count >= REQUIRED_INVITES) {
-            if (!member.roles.cache.has(role.id)) {
-                await member.roles.add(role, `Reached ${REQUIRED_INVITES}+ valid invites`);
-                console.log(`✅ ${member.user.tag} received Quest Access (${count} invites)`);
-            }
-            return;
-        }
-
-        if (member.roles.cache.has(role.id)) {
-            await member.roles.remove(role, `Invite count below ${REQUIRED_INVITES}`);
-            console.log(`🔒 Quest Access removed from ${member.user.tag} (${count} invites)`);
-        }
-    } catch (error) {
-        console.error(`❌ Failed to update Quest Access for ${member.user.tag}:`, error.message);
-    }
-}
-
-// =====================================================
-// CACHE GUILD INVITES
-// =====================================================
-
+// Cache guild invites when bot starts
 export async function cacheGuildInvites(client) {
-    for (const guild of client.guilds.cache.values()) {
+    client.guilds.cache.forEach(async (guild) => {
         try {
-            const invites = await guild.invites.fetch();
-            const cache = new Map();
-
-            for (const invite of invites.values()) {
-                cache.set(invite.code, invite.uses ?? 0);
-            }
-
-            invitesCache.set(guild.id, cache);
-            console.log(`✅ Invite cache loaded: ${guild.name}`);
-        } catch (error) {
-            console.error(`❌ Failed to cache invites for ${guild.name}:`, error.message);
+            const firstGuildInvites = await guild.invites.fetch();
+            invitesCache.set(guild.id, new Map(firstGuildInvites.map((invite) => [invite.code, invite.uses])));
+        } catch (err) {
+            console.error(`Failed to fetch invites for guild ${guild.name}:`, err);
         }
-    }
+    });
 }
 
-// =====================================================
-// FIND USED INVITE
-// =====================================================
-
-async function findUsedInvite(guild) {
-    const oldCache = invitesCache.get(guild.id) || new Map();
-    let newInvites;
-
-    try {
-        newInvites = await guild.invites.fetch();
-    } catch (error) {
-        console.error(`❌ Failed to fetch invites for ${guild.name}:`, error.message);
-        return null;
-    }
-
-    let usedInvite = null;
-
-    for (const invite of newInvites.values()) {
-        const oldUses = oldCache.get(invite.code) ?? 0;
-        const newUses = invite.uses ?? 0;
-
-        if (newUses > oldUses) {
-            usedInvite = invite;
-            break;
-        }
-    }
-
-    const newCache = new Map();
-    for (const invite of newInvites.values()) {
-        newCache.set(invite.code, invite.uses ?? 0);
-    }
-    invitesCache.set(guild.id, newCache);
-
-    return usedInvite;
-}
-
-// =====================================================
-// MEMBER JOIN
-// =====================================================
-
+// Handle member join & track real invites safely
 export async function handleInviteJoin(member) {
     if (!member || member.user.bot) return;
 
     const guild = member.guild;
+    const cachedInvites = invitesCache.get(guild.id);
+    if (!cachedInvites) return;
 
     try {
-        const usedInvite = await findUsedInvite(guild);
-        if (!usedInvite || !usedInvite.inviter) return;
+        const newInvites = await guild.invites.fetch();
+        let usedInvite = null;
 
-        const inviter = usedInvite.inviter;
-        if (inviter.id === member.id) return;
-
-        const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
-        if (accountAgeDays < MIN_ACCOUNT_AGE_DAYS) return;
-
-        const inviterData = getUserData(inviter.id);
-
-        if (inviterData.invitedUsers.includes(member.id)) return;
-
-        const lastLeft = inviterData.leaveHistory[member.id] || 0;
-        const cooldown = REJOIN_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
-
-        if (lastLeft && Date.now() - lastLeft < cooldown) return;
-
-        inviterData.invitedUsers.push(member.id);
-        inviterData.count = inviterData.invitedUsers.length;
-        delete inviterData.leaveHistory[member.id];
-
-        saveDB();
-
-        console.log(`✅ Valid invite: ${inviter.tag} → ${member.user.tag} (${inviterData.count} total)`);
-
-        const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
-        if (inviterMember) {
-            await updateQuestAccess(inviterMember);
-            if (inviterData.count === REQUIRED_INVITES) {
-                try {
-                    await inviterMember.send(
-                        `🎉 **Quest Access Unlocked!**\n\n` +
-                        `You now have **${inviterData.count} valid invites**.\n` +
-                        `🔓 **Quest Access** has been given to you!`
-                    );
-                } catch {}
+        for (const [code, invite] of newInvites) {
+            const cachedUses = cachedInvites.get(code) || 0;
+            if (invite.uses > cachedUses) {
+                usedInvite = invite;
+                break;
             }
         }
-    } catch (error) {
-        console.error('❌ Error tracking invite join:', error);
-    }
-}
 
-// =====================================================
-// MEMBER LEAVE
-// =====================================================
+        invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
-export async function handleInviteLeave(member) {
-    if (!member || member.user.bot) return;
+        if (usedInvite && usedInvite.inviter) {
+            const inviter = usedInvite.inviter;
 
-    const guild = member.guild;
+            if (inviter.id === member.user.id) return;
 
-    try {
-        try {
-            const invites = await guild.invites.fetch();
-            const newCache = new Map();
-            for (const invite of invites.values()) {
-                newCache.set(invite.code, invite.uses ?? 0);
+            const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
+            if (accountAgeDays < 7) return;
+
+            if (!inviteData[inviter.id]) {
+                inviteData[inviter.id] = { count: 0, invitedUsers: [], leaveHistory: {} };
             }
-            invitesCache.set(guild.id, newCache);
-        } catch {}
+            if (!inviteData[inviter.id].leaveHistory) {
+                inviteData[inviter.id].leaveHistory = {};
+            }
 
-        for (const inviterId of Object.keys(inviteData)) {
-            const data = inviteData[inviterId];
-            if (!data || !Array.isArray(data.invitedUsers)) continue;
+            const now = Date.now();
+            const fourteenDaysInMs = 14 * 24 * 60 * 60 * 1000;
+            const lastLeftTime = inviteData[inviter.id].leaveHistory[member.id] || 0;
 
-            const index = data.invitedUsers.indexOf(member.id);
-            if (index === -1) continue;
+            const isRecentRejoin = (now - lastLeftTime) < fourteenDaysInMs;
+            const isAlreadyInvited = inviteData[inviter.id].invitedUsers.includes(member.id);
 
-            const oldCount = data.invitedUsers.length;
-            data.invitedUsers.splice(index, 1);
-            data.count = data.invitedUsers.length;
+            if (isAlreadyInvited || isRecentRejoin) return; 
 
-            if (!data.leaveHistory) data.leaveHistory = {};
-            data.leaveHistory[member.id] = Date.now();
-
+            inviteData[inviter.id].invitedUsers.push(member.id);
+            inviteData[inviter.id].count = inviteData[inviter.id].invitedUsers.length;
             saveDB();
 
-            const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
-            if (inviterMember) {
-                await updateQuestAccess(inviterMember);
+            const currentCount = inviteData[inviter.id].count;
+            const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
 
-                if (oldCount >= REQUIRED_INVITES && data.count < REQUIRED_INVITES) {
+            if (currentCount >= 2 && targetRole) {
+                const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
+                if (inviterMember && !inviterMember.roles.cache.has(targetRole.id)) {
+                    await inviterMember.roles.add(targetRole).catch(() => {});
                     try {
-                        await inviterMember.send(
-                            `⚠️ **Quest Access Locked**\n\n` +
-                            `One of your invited members left.\n` +
-                            `📊 Current Invites: **${data.count}/${REQUIRED_INVITES}**`
-                        );
+                        await inviterMember.send(`🎉 Congratulations! You have completed 2 valid invites and your Quest Access has been unlocked.`);
                     } catch {}
                 }
             }
-            break;
         }
-    } catch (error) {
-        console.error('❌ Error handling member leave:', error);
+    } catch (err) {
+        console.error("Error tracking invite join:", err);
     }
 }
 
-// =====================================================
-// COMMAND ACCESS
-// =====================================================
+// Handle member leave safely with accurate verification
+export async function handleInviteLeave(member) {
+    if (!member || member.user.bot) return;
+    const guild = member.guild;
 
+    try {
+        const newInvites = await guild.invites.fetch();
+        invitesCache.set(guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
+    } catch (err) {
+        console.error(`Failed to update invites cache on leave:`, err);
+    }
+
+    for (const inviterId in inviteData) {
+        const data = inviteData[inviterId];
+        
+        if (data && Array.isArray(data.invitedUsers)) {
+            const index = data.invitedUsers.indexOf(member.id);
+            if (index !== -1) {
+                data.invitedUsers.splice(index, 1);
+                data.count = data.invitedUsers.length;
+                
+                if (!data.leaveHistory) data.leaveHistory = {};
+                data.leaveHistory[member.id] = Date.now();
+
+                saveDB();
+
+                const targetRole = guild.roles.cache.find(r => r.name === 'Quest Access');
+                if (targetRole) {
+                    const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
+                    
+                    if (inviterMember && data.count < 2) {
+                        if (inviterMember.roles.cache.has(targetRole.id)) {
+                            await inviterMember.roles.remove(targetRole).catch(() => {});
+                            try {
+                                await inviterMember.send(`⚠️ One of your invited members left the server. Your active invite count dropped below 2, so your Quest Access has been locked.`);
+                            } catch {}
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+// Check command access & auto-correct role if count is valid
 export async function checkCommandAccess(user, member) {
     const OWNER_ID = process.env.OWNER_ID || '';
 
-    if (OWNER_ID && user.id === OWNER_ID) return { allowed: true };
-    if (member.permissions.has('Administrator')) return { allowed: true };
-
-    const isBooster = member.premiumSince !== null;
-    const customBoostRole = member.guild.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
-    if (isBooster || (customBoostRole && member.roles.cache.has(customBoostRole.id))) {
+    if (user.id === OWNER_ID || member.permissions.has('Administrator')) {
         return { allowed: true };
     }
 
-    const userData = inviteData[user.id];
-    const currentCount = userData ? userData.count : 0;
-    const targetRole = getQuestAccessRole(member.guild);
+    const isBooster = member.premiumSince !== null || member.roles.premiumSubscriberRole;
+    const customBoostRole = member.guild.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
+    const hasCustomBoostRole = customBoostRole && member.roles.cache.has(customBoostRole.id);
 
-    if (currentCount >= REQUIRED_INVITES) {
+    const targetRole = member.guild.roles.cache.find(r => r.name === 'Quest Access');
+
+    if (isBooster || hasCustomBoostRole) {
         if (targetRole && !member.roles.cache.has(targetRole.id)) {
-            await member.roles.add(targetRole, `Has ${currentCount} valid invites`).catch(() => {});
+            await member.roles.add(targetRole).catch(() => {});
         }
         return { allowed: true };
     }
 
-    if (targetRole && member.roles.cache.has(targetRole.id)) {
-        await member.roles.remove(targetRole, `Only ${currentCount} valid invites`).catch(() => {});
+    const currentCount = inviteData[user.id]?.count || 0;
+
+    // AUTO-CORRECTION FIX: Agar database count 2 ya usse zyada hai, toh role turant wapas mil jayega
+    if (currentCount >= 2) {
+        if (targetRole && !member.roles.cache.has(targetRole.id)) {
+            await member.roles.add(targetRole).catch(() => {});
+        }
+        return { allowed: true };
+    } else {
+        if (targetRole && member.roles.cache.has(targetRole.id)) {
+            await member.roles.remove(targetRole).catch(() => {});
+        }
     }
 
-    return {
-        allowed: false,
-        message:
-            `❌ **Access Denied**\n\n` +
-            `You need **Quest Access** to run quest commands.\n\n` +
-            `📊 **Your Invites:** \`${Math.min(currentCount, REQUIRED_INVITES)}/${REQUIRED_INVITES}\`\n\n` +
-            `✨ **How to unlock:**\n` +
-            `• Invite **2 valid friends**\n` +
-            `• Or **Boost the Server**`
+    const progressText = `${Math.min(currentCount, 2)}/2`;
+
+    return { 
+        allowed: false, 
+        message: `❌ **Access Denied**\n\n` +
+                 `You need **Quest Access** to run quest commands on this server.\n\n` +
+                 `📊 **Your Invites Progress:** \`${progressText} invites completed\`\n\n` +
+                 `✨ **How to get access instantly:**\n` +
+                 `• Invite **2 friends** to the server\n` +
+                 `• **Boost the Server**` 
     };
 }
