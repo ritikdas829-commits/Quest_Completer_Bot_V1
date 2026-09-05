@@ -74,7 +74,7 @@ function getQuestAccessRole(guild) {
 }
 
 // =====================================================
-// UPDATE QUEST ACCESS (Strictly 2+ Invites)
+// UPDATE QUEST ACCESS (Dynamic Role Management)
 // =====================================================
 
 async function updateQuestAccess(member) {
