@@ -1,4 +1,4 @@
-import 'dotenv/config';
+Import 'dotenv/config';
 import { Client, GatewayIntentBits, Collection, Partials, EmbedBuilder, ActivityType } from 'discord.js';
 import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -155,11 +155,6 @@ for (const file of commandFiles) {
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
     }
-    for (const [key, cmd] of Object.entries(mod)) {
-        if (key === 'default' || key === 'makeTokenStore' || key === 'handleLinkModal' || key === 'handleLinkPromptButton' || key === 'handlePlatformButton' || key === 'runAutoquestForUser') continue;
-        if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
-        if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
-    }
 }
 
 const eventFiles = readdirSync(join(__dirname, 'events')).filter(f => f.endsWith('.js'));
@@ -183,4 +178,3 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
-
