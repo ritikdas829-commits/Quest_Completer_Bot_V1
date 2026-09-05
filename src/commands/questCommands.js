@@ -13,6 +13,8 @@ import {
     TextInputBuilder,
     TextInputStyle,
     MessageFlags,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
@@ -21,6 +23,21 @@ import { TokenStore } from '../quest/tokenStore.js';
 import { enableAutoquest, disableAutoquest, isAutoquestEnabled } from '../quest/autoquestStore.js';
 import { PREFIX } from '../utils/config.js';
 import { QuestManager } from '../quest/questManager.js';
+
+// 📌 Quest Task Config Types Mapping
+const QuestTaskConfigType = {
+    WATCH_VIDEO:           'WATCH_VIDEO',
+    PLAY_ON_DESKTOP:       'PLAY_ON_DESKTOP',
+    STREAM_ON_DESKTOP:     'STREAM_ON_DESKTOP',
+    PLAY_ACTIVITY:         'PLAY_ACTIVITY',
+    WATCH_VIDEO_ON_MOBILE: 'WATCH_VIDEO_ON_MOBILE',
+    WATCH_VIDEO_BY_STREAM: 'WATCH_VIDEO_BY_STREAM',
+    LEARN_MORE:            'LEARN_MORE',
+    WATCH_VIDEO_EMBED:     'WATCH_VIDEO_EMBED',
+    PLAY_ON_XBOX:          'PLAY_ON_XBOX',
+    PLAY_ON_PLAYSTATION:   'PLAY_ON_PLAYSTATION',
+    ACHIEVEMENT_IN_ACTIVITY: 'ACHIEVEMENT_IN_ACTIVITY',
+};
 
 export function makeTokenStore(secret) {
     return new TokenStore(secret);
@@ -220,6 +237,33 @@ function buildErrorCard(err) {
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
 
+function buildQuestSelectCard(validQuests) {
+    const c = new ContainerBuilder().setAccentColor(0x5865F2);
+    c.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            `# 🎮 Select a Quest\n` +
+            `Please choose which quest you want to run from the dropdown menu below:`
+        ),
+    );
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('quest_select_menu')
+        .setPlaceholder('Choose an available quest...')
+        .addOptions(
+            validQuests.slice(0, 25).map((q) => {
+                const questName = q.config?.messages?.quest_name || 'Unknown Quest';
+                const gameTitle = q.config?.messages?.game_title || 'Discord Quest';
+                return new StringSelectMenuOptionBuilder()
+                    .setLabel(questName.substring(0, 100))
+                    .setDescription(gameTitle.substring(0, 100))
+                    .setValue(q.id);
+            })
+        );
+
+    const row = new ActionRowBuilder().addComponents(selectMenu);
+    return { components: [c], componentsV2: [row], flags: MessageFlags.IsComponentsV2 };
+}
+
 async function runQuestAll(userId, tokenStore, channel, send, discordClient, username = 'User') {
     const token = tokenStore.get(userId);
     if (!token) { await send(buildLinkPrompt()).catch(() => {}); return false; }
@@ -233,7 +277,6 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient, use
         const sessionRef = { msg: null };
         await QuestManager.updateSessionBox(channel, valid, sessionRef, username);
 
-        // Promise.allSettled ka use kiya taki error aane par bhi baki quests chalte rahein
         await Promise.allSettled(
             valid.map(async (quest) => {
                 try {
@@ -279,7 +322,38 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient, use
 }
 
 async function runQuestOne(userId, tokenStore, channel, send, discordClient, username = 'User') {
-    return runQuestAll(userId, tokenStore, channel, send, discordClient, username);
+    const token = tokenStore.get(userId);
+    if (!token) { await send(buildLinkPrompt()).catch(() => {}); return false; }
+
+    const qc = new QuestClient(token);
+    try {
+        const manager = await qc.fetchQuests();
+        const valid = manager.filterQuestsValid();
+        if (valid.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return false; }
+
+        if (valid.length === 1) {
+            const sessionRef = { msg: null };
+            await manager.doingQuest(valid[0], channel, userId, valid, sessionRef, username);
+            await manager.claimRewards(console.log).catch(() => 0);
+            return true;
+        }
+
+        const selectPayload = buildQuestSelectCard(valid);
+        await channel.send({
+            components: selectPayload.components,
+        }).catch(() => null);
+
+        return true;
+    } catch (err) {
+        const msg = err?.message ?? String(err);
+        if (msg.includes('401') && tokenStore.has(userId)) {
+            tokenStore.remove(userId); disableAutoquest(userId);
+            await send(buildExpiredTokenCard()).catch(() => {});
+        } else {
+            await send(buildErrorCard(err)).catch(() => {});
+        }
+        return false;
+    }
 }
 
 async function runQuestList(userId, tokenStore, send) {
@@ -292,14 +366,19 @@ async function runQuestList(userId, tokenStore, send) {
         const all = manager.list();
         if (all.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return; }
 
+        // Using QuestTaskConfigType keys securely here
         const TASK_META = {
-            PLAY_ON_DESKTOP:       { icon: '🖥️', label: 'Play on Desktop' },
-            WATCH_VIDEO:           { icon: '🎬', label: 'Watch Video' },
-            STREAM_ON_DESKTOP:     { icon: '📺', label: 'Stream on Desktop' },
-            PLAY_ACTIVITY:         { icon: '🎮', label: 'Play Activity' },
-            WATCH_VIDEO_ON_MOBILE: { icon: '📱', label: 'Watch Video on Mobile' },
-            LEARN_MORE:            { icon: '💡', label: 'Learn More' },
-            WATCH_VIDEO_EMBED:     { icon: '🎬', label: 'Watch Video Embed' },
+            [QuestTaskConfigType.PLAY_ON_DESKTOP]:       { icon: '🖥️', label: 'Play on Desktop' },
+            [QuestTaskConfigType.WATCH_VIDEO]:           { icon: '🎬', label: 'Watch Video' },
+            [QuestTaskConfigType.STREAM_ON_DESKTOP]:     { icon: '📺', label: 'Stream on Desktop' },
+            [QuestTaskConfigType.PLAY_ACTIVITY]:         { icon: '🎮', label: 'Play Activity' },
+            [QuestTaskConfigType.WATCH_VIDEO_ON_MOBILE]: { icon: '📱', label: 'Watch Video on Mobile' },
+            [QuestTaskConfigType.WATCH_VIDEO_BY_STREAM]: { icon: '📡', label: 'Watch Video by Stream' },
+            [QuestTaskConfigType.LEARN_MORE]:            { icon: '💡', label: 'Learn More' },
+            [QuestTaskConfigType.WATCH_VIDEO_EMBED]:     { icon: '🎬', label: 'Watch Video Embed' },
+            [QuestTaskConfigType.PLAY_ON_XBOX]:          { icon: '🟩', label: 'Play on Xbox' },
+            [QuestTaskConfigType.PLAY_ON_PLAYSTATION]:   { icon: '🎮', label: 'Play on PlayStation' },
+            [QuestTaskConfigType.ACHIEVEMENT_IN_ACTIVITY]: { icon: '🏆', label: 'Achievement in Activity' },
         };
 
         for (const q of all.slice(0, 10)) {
@@ -317,15 +396,8 @@ async function runQuestList(userId, tokenStore, send) {
 
             const taskLines = Object.entries((cfg.task_config ?? cfg.task_config_v2)?.tasks ?? {}).map(([type, task]) => {
                 const meta = TASK_META[type] ?? { icon: '⚙️', label: type };
-                let dur = '';
-                let targetSecs = task.target || 0;
-                
-                if (type === 'PLAY_ON_DESKTOP' || type === 'STREAM_ON_DESKTOP') {
-                    const mins = Math.ceil(targetSecs / 60);
-                    dur = `  •  ⏱️ **Duration: ${mins} min** (${targetSecs}s)`;
-                } else {
-                    dur = targetSecs >= 60 ? `  •  ⏱️ **Duration: ${Math.ceil(targetSecs / 60)} min**` : `  •  ⏱️ **Duration: ${targetSecs}s**`;
-                }
+                let targetSecs = task.target || task.seconds || 0;
+                let dur = targetSecs >= 60 ? `  •  ⏱️ **Duration: ${Math.ceil(targetSecs / 60)} min**` : `  •  ⏱️ **Duration: ${targetSecs}s**`;
                 return `${meta.icon} ${meta.label}${dur}`;
             });
 
@@ -414,7 +486,7 @@ async function runAutoquestToggle(userId, tokenStore, replyFn) {
 }
 
 export const questCmd = {
-    data: new SlashCommandBuilder().setName('quest').setDescription('Complete all available Discord quests in a single box session V3'),
+    data: new SlashCommandBuilder().setName('quest').setDescription('Complete available Discord quests using interactive selection V3'),
     prefix: 'quest',
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
@@ -657,4 +729,3 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest V3:${userId}] Error:`, err?.message);
     }
 }
-
