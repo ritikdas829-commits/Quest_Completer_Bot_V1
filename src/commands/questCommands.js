@@ -39,7 +39,6 @@ function checkUserAccess(member, interactionOrMessage) {
     const userId = member.id || member.author?.id;
     if (!userId) return false;
 
-    // Advanced Booster Check
     const isBooster = member.premiumSince !== null || member.roles?.premiumSubscriberRole;
     const customBoostRole = member.guild?.roles.cache.find(r => r.name.toLowerCase().includes('boost'));
     const hasCustomBoostRole = customBoostRole && member.roles?.cache.has(customBoostRole.id);
@@ -231,18 +230,12 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
         const valid = manager.filterQuestsValid();
         if (valid.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return false; }
 
-        let userName = 'User';
-        try {
-            const fetchedUser = await discordClient?.users?.fetch(userId);
-            if (fetchedUser) userName = fetchedUser.global_name || fetchedUser.username || 'User';
-        } catch {}
+        QuestManager.activeSessionMessage = null;
+        await QuestManager.updateSessionBox(channel, valid);
 
-        const sessionRef = { msg: null };
-        sessionRef.msg = await QuestManager.updateSessionBox(channel, valid, sessionRef, userName);
-
-        for (const quest of valid) {
-            await manager.doingQuest(quest, channel, userId, valid, sessionRef, userName);
-        }
+        await Promise.all(
+            valid.map((quest) => manager.doingQuest(quest, channel, userId, valid))
+        );
 
         await manager.claimRewards(console.log).catch(() => 0);
 
