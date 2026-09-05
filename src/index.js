@@ -57,16 +57,15 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel],
 });
 
-client.commands       = new Collection();
-client.prefixCommands = new Collection();
-client.tokenStore     = makeTokenStore(TOKEN);
+client.commands  = new Collection();
+client.tokenStore = makeTokenStore(TOKEN);
 
 global.AUTO_ROLE_ID = null;
 
 client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
-    client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
+    client.user.setActivity('Quest Completer V3 | /help', { type: ActivityType.Watching });
     
     client.guilds.cache.forEach(async (guild) => {
         try {
@@ -96,34 +95,7 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Safe & Smart Prefix Message Handler
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    const prefix = '.'; 
-    
-    if (message.content.startsWith(prefix)) {
-        const args = message.content.slice(prefix.length).trim().split(/ +/);
-        const commandName = args.shift().toLowerCase();
-
-        const command = client.prefixCommands.get(commandName) || client.commands.get(commandName);
-        if (command) {
-            try {
-                if (typeof command.prefixExecute === 'function') {
-                    await command.prefixExecute(message, args, client);
-                } else if (typeof command.execute === 'function') {
-                    // Safe execution wrapper for slash-based commands used via prefix
-                    await command.execute(message, client);
-                }
-            } catch (error) {
-                console.error(`Error executing prefix command ${commandName}:`, error);
-                await message.reply('There was an error executing that command!').catch(() => {});
-            }
-            return;
-        }
-    }
-});
-
+// Clean Interaction Handler (Supports all Slash Commands & Buttons smoothly)
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
         if (interaction.customId === 'refresh_status') {
@@ -154,7 +126,7 @@ client.on('interactionCreate', async (interaction) => {
     try {
         await command.execute(interaction, client);
     } catch (error) {
-        console.error(error);
+        console.error(`Error executing slash command ${interaction.commandName}:`, error);
         if (interaction.replied || interaction.deferred) {
             await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
         } else {
@@ -163,7 +135,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Auto-register all commands as both slash and prefix commands
+// Load all slash commands cleanly
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
@@ -172,10 +144,6 @@ for (const file of commandFiles) {
         const cmd = mod.default;
         if (cmd?.data?.name) {
             client.commands.set(cmd.data.name, cmd);
-            client.prefixCommands.set(cmd.data.name, cmd); // Ensures .q, .link, etc. all work
-        }
-        if (cmd?.prefix) {
-            client.prefixCommands.set(cmd.prefix, cmd);
         }
     }
 }
@@ -191,13 +159,13 @@ for (const file of eventFiles) {
     }
 }
 
-// Global Crash Handlers
+// Global Crash Handlers to prevent Railway container termination
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('⚠️ Unhandled Rejection:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('⚠️ Uncaught Exception thrown:', error);
+    console.error('⚠️ Uncaught Exception:', error);
 });
 
 client.login(TOKEN);
