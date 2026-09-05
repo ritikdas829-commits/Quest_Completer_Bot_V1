@@ -4,7 +4,8 @@ import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
-import { makeTokenStore, handlePlatformButton, handleInviteJoin, handleInviteLeave, cacheGuildInvites } from './commands/questCommands.js';
+import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
+import { handleInviteJoin, handleInviteLeave, cacheGuildInvites } from './handlers/inviteTracker.js';
 import { writeFileSync, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -46,8 +47,8 @@ banner();
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers, // <--- Yahan add kar diya hai (Privileged Intent zaroori hai)
-        GatewayIntentBits.GuildInvites, // <--- Invites track karne ke liye zaroori hai
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildInvites,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
@@ -158,7 +159,7 @@ for (const file of commandFiles) {
         if (cmd?.data?.name) client.prefixCommands.set(cmd.data.name, cmd);
     }
     for (const [key, cmd] of Object.entries(mod)) {
-        if (['default', 'makeTokenStore', 'handleLinkModal', 'handleLinkPromptButton', 'runAutoquestForUser', 'cacheGuildInvites', 'handleInviteJoin', 'handleInviteLeave'].includes(key)) continue;
+        if (['default', 'makeTokenStore', 'handleLinkModal', 'handleLinkPromptButton', 'runAutoquestForUser'].includes(key)) continue;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
         if (cmd?.data?.name) client.prefixCommands.set(cmd.data.name, cmd);
