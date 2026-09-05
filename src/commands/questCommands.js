@@ -234,9 +234,9 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
         QuestManager.activeSessionMessage = null;
         await QuestManager.updateSessionBox(channel, valid);
 
-        await Promise.all(
-            valid.map((quest) => manager.doingQuest(quest, channel, userId, valid))
-        );
+        for (const quest of valid) {
+            await manager.doingQuest(quest, channel, userId, valid);
+        }
 
         await manager.claimRewards(console.log).catch(() => 0);
 
