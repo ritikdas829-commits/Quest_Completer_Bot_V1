@@ -87,6 +87,34 @@ client.on('messageCreate', async (message) => {
 
 // 2. Interaction Handler (स्लैश कमांड्स / और बटन्स के लिए)
 client.on('interactionCreate', async (interaction) => {
+    // --- BUTTON HANDLER ---
+    if (interaction.isButton()) {
+        try {
+            if (interaction.customId === 'setup_pc') {
+                await interaction.update({ 
+                    content: '💻 **PC Setup Instructions:**\n1. Apna token copy karein...\n2. Command run karein...', 
+                    components: interaction.message.components 
+                });
+            } 
+            else if (interaction.customId === 'setup_android') {
+                await interaction.update({ 
+                    content: '📱 **Android Setup Instructions:**\n1. Kiwi browser open karein...\n2. Extensions install karein...', 
+                    components: interaction.message.components 
+                });
+            } 
+            else if (interaction.customId === 'setup_ios') {
+                await interaction.update({ 
+                    content: '🍏 **iOS Setup Instructions:**\n1. Safari/Orion browser use karein...\n2. Steps follow karein...', 
+                    components: interaction.message.components 
+                });
+            }
+        } catch (error) {
+            console.error("Button interaction error:", error);
+        }
+        return;
+    }
+
+    // --- SLASH COMMAND HANDLER ---
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
