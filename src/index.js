@@ -57,15 +57,16 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel],
 });
 
-client.commands  = new Collection();
-client.tokenStore = makeTokenStore(TOKEN);
+client.commands       = new Collection();
+client.prefixCommands = new Collection();
+client.tokenStore     = makeTokenStore(TOKEN);
 
 global.AUTO_ROLE_ID = null;
 
 client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
-    client.user.setActivity('Quest Completer V3 | /help', { type: ActivityType.Watching });
+    client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
     
     client.guilds.cache.forEach(async (guild) => {
         try {
@@ -95,47 +96,56 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Clean Interaction Handler (Supports all Slash Commands & Buttons smoothly)
-client.on('interactionCreate', async (interaction) => {
-    if (interaction.isButton()) {
-        if (interaction.customId === 'refresh_status') {
-            const access = await checkCommandAccess(interaction.user, interaction.member);
-            
-            const updatedEmbed = new EmbedBuilder()
-                .setColor(access.allowed ? '#00FFCC' : '#FF3366')
-                .setTitle('🛡️ Quest Status & Invite Verification (V3)')
-                .setDescription(access.allowed 
-                    ? `🎉 **Access Granted!** Status refreshed successfully.` 
-                    : access.message)
-                .setTimestamp()
-                .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+// Message Handler (Prefix Commands)
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
-            await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
-        } 
-        else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
-            await handlePlatformButton(interaction);
-        }
-        return;
-    }
+    const prefix = '.'; 
+    
+    if (message.content.startsWith(prefix)) {
+        const args = message.content.slice(prefix.length).trim().split(/ +/);
+        const commandName = args.shift().toLowerCase();
 
-    if (!interaction.isChatInputCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-
-    try {
-        await command.execute(interaction, client);
-    } catch (error) {
-        console.error(`Error executing slash command ${interaction.commandName}:`, error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
-        } else {
-            await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true }).catch(() => {});
+        const command = client.prefixCommands.get(commandName);
+        if (command) {
+            try {
+                if (command.prefixExecute) {
+                    await command.prefixExecute(message, args, client);
+                } else {
+                    await command.execute(message, client);
+                }
+            } catch (error) {
+                console.error(error);
+                await message.reply('There was an error executing that command!').catch(() => {});
+            }
+            return;
         }
     }
 });
 
-// Load all slash commands cleanly
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'refresh_status') {
+        const access = await checkCommandAccess(interaction.user, interaction.member);
+        
+        const updatedEmbed = new EmbedBuilder()
+            .setColor(access.allowed ? '#00FFCC' : '#FF3366')
+            .setTitle('🛡️ Quest Status & Invite Verification (V3)')
+            .setDescription(access.allowed 
+                ? `🎉 **Access Granted!** Status refreshed successfully.` 
+                : access.message)
+            .setTimestamp()
+            .setFooter({ text: 'Quest Completer V3 System', iconURL: interaction.client.user.displayAvatarURL() });
+
+        await interaction.update({ embeds: [updatedEmbed] }).catch(() => {});
+    } 
+    else if (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios') {
+        await handlePlatformButton(interaction);
+    }
+});
+
+// Command Loader
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
@@ -144,6 +154,9 @@ for (const file of commandFiles) {
         const cmd = mod.default;
         if (cmd?.data?.name) {
             client.commands.set(cmd.data.name, cmd);
+        }
+        if (cmd?.prefix) {
+            client.prefixCommands.set(cmd.prefix, cmd);
         }
     }
 }
@@ -159,13 +172,14 @@ for (const file of eventFiles) {
     }
 }
 
-// Global Crash Handlers to prevent Railway container termination
+// Global Crash Handlers
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('⚠️ Unhandled Rejection:', reason);
+    console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('⚠️ Uncaught Exception:', error);
+    console.error('⚠️ Uncaught Exception thrown:', error);
 });
 
 client.login(TOKEN);
+
