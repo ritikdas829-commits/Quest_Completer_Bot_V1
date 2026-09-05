@@ -74,7 +74,7 @@ function getQuestAccessRole(guild) {
 }
 
 // =====================================================
-// UPDATE QUEST ACCESS
+// UPDATE QUEST ACCESS (Strictly 2+ Invites)
 // =====================================================
 
 async function updateQuestAccess(member) {
@@ -204,7 +204,7 @@ export async function handleInviteJoin(member) {
         const inviterMember = await guild.members.fetch(inviter.id).catch(() => null);
         if (inviterMember) {
             await updateQuestAccess(inviterMember);
-            if (inviterData.count >= REQUIRED_INVITES) {
+            if (inviterData.count === REQUIRED_INVITES) {
                 try {
                     await inviterMember.send(
                         `🎉 **Quest Access Unlocked!**\n\n` +
