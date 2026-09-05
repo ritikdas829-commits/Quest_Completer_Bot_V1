@@ -1,4 +1,4 @@
-Import 'dotenv/config';
+import 'dotenv/config';
 import { Client, GatewayIntentBits, Collection, Partials, EmbedBuilder, ActivityType } from 'discord.js';
 import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
