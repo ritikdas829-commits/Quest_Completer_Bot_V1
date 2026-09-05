@@ -4,7 +4,7 @@ import { readdirSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import deployCommands from './utils/deployCommands.js';
-import { makeTokenStore, handlePlatformButton } from './commands/questCommands.js';
+import { makeTokenStore, handlePlatformButton, handleInviteJoin, handleInviteLeave, cacheGuildInvites } from './commands/questCommands.js';
 import { writeFileSync, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,24 +43,39 @@ if (!existsSync('autoquest.json')) writeFileSync('autoquest.json', '[]');
 
 banner();
 
-// Railway timeout crash से बचने के लिए इसे कमेंट रखा है (कमांड्स पहले से रजिस्टर्ड हैं)
-// await deployCommands(TOKEN, process.env.DISCORD_CLIENT_ID);
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers, // <--- Yahan add kar diya hai (Privileged Intent zaroori hai)
+        GatewayIntentBits.GuildInvites, // <--- Invites track karne ke liye zaroori hai
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
     ],
-    partials: [Partials.Message, Partials.Channel],
+    partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
 });
 
 client.commands       = new Collection();
 client.prefixCommands = new Collection();
 client.tokenStore     = makeTokenStore(TOKEN);
 
-// 1. Prefix Message Handler (प्रिफिक्स कमांड्स के लिए जैसे .q, .link)
+// Client ready hone par invites cache karein
+client.once('ready', async () => {
+    await cacheGuildInvites(client);
+    console.log(`Bot logged in as ${client.user.tag}`);
+});
+
+// Member join hone par invite track karein
+client.on('guildMemberAdd', async (member) => {
+    await handleInviteJoin(member);
+});
+
+// Member leave hone par invite count update karein aur role check karein
+client.on('guildMemberRemove', async (member) => {
+    await handleInviteLeave(member);
+});
+
+// 1. Prefix Message Handler
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -85,18 +100,16 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// 2. Interaction Handler (स्लैश कमांड्स / और बटन्स के लिए)
+// 2. Interaction Handler
 client.on('interactionCreate', async (interaction) => {
     // --- BUTTON HANDLER ---
     if (interaction.isButton()) {
         try {
-            // Agar link prompt button hai
             if (interaction.customId === 'link_prompt') {
                 const { handleLinkPromptButton } = await import('./commands/questCommands.js');
                 await handleLinkPromptButton(interaction);
                 return;
             }
-            // Agar platform setup buttons hain (btn_pc, btn_android, btn_ios)
             if (['btn_pc', 'btn_android', 'btn_ios'].includes(interaction.customId)) {
                 await handlePlatformButton(interaction);
                 return;
@@ -107,7 +120,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // Agar Modal submit hai
+    // --- MODAL SUBMIT ---
     if (interaction.isModalSubmit()) {
         if (interaction.customId === 'link_token_modal') {
             const { handleLinkModal } = await import('./commands/questCommands.js');
@@ -134,21 +147,18 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Command Loader (आपके पुराने कोड का स्ट्रक्चर)
+// Command Loader
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
-    // Single default export
     if (mod.default) {
         const cmd = mod.default;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
-        // प्रिफिक्स को डायरेक्ट नाम से भी मैप कर देते हैं ताकि .q या .link सीधे काम करें
         if (cmd?.data?.name) client.prefixCommands.set(cmd.data.name, cmd);
     }
-    // Named exports
     for (const [key, cmd] of Object.entries(mod)) {
-        if (key === 'default' || key === 'makeTokenStore' || key === 'handleLinkModal' || key === 'handleLinkPromptButton' || key === 'runAutoquestForUser') continue;
+        if (['default', 'makeTokenStore', 'handleLinkModal', 'handleLinkPromptButton', 'runAutoquestForUser', 'cacheGuildInvites', 'handleInviteJoin', 'handleInviteLeave'].includes(key)) continue;
         if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
         if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
         if (cmd?.data?.name) client.prefixCommands.set(cmd.data.name, cmd);
@@ -166,7 +176,7 @@ for (const file of eventFiles) {
     }
 }
 
-// Global Crash Handlers ताकि बोट रेलवे पर क्रैश होकर बंद न हो
+// Global Crash Handlers
 process.on('unhandledRejection', (reason) => {
     console.error('⚠️ Unhandled Rejection:', reason);
 });
@@ -176,4 +186,3 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
-
