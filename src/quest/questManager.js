@@ -41,7 +41,7 @@ export class QuestManager {
     list() { return Array.from(this.#quests.values()); }
     get(id) { return this.#quests.get(id); }
     upsert(quest) { this.#quests.set(quest.id, quest); }
-    remove(id) { return this.#quests.delete(id); }
+    remove(id) { this.#quests.delete(id); }
     clear() { this.#quests.clear(); }
     hasQuest(id) { return this.#quests.has(id); }
 
@@ -142,7 +142,7 @@ export class QuestManager {
         } catch {}
     }
 
-    // Quest Completer V3 - Live Dashboard Generator with Smart Duration & Progress Bar
+    // Quest Completer V3 - Live Dashboard Generator (Fixed to prevent message spam)
     static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }, userName = 'User') {
         if (!channel) return sessionMessageRef.msg;
         try {
@@ -171,14 +171,12 @@ export class QuestManager {
                     totalOrbsEarned += orbAmount;
                 }
 
-                // सटीक समय कैलकुलेशन (जैसे 15 min या 29s)
                 const taskConfig = q.config.task_config ?? q.config.task_config_v2;
                 const tasks = taskConfig?.tasks ?? {};
                 const taskName = Object.keys(tasks)[0];
                 const task = tasks[taskName];
                 const targetSecs = task?.target || task?.seconds || 30;
                 
-                // अगर 60 सेकंड से ज्यादा है तो मिनट में दिखाएं, वरना सेकंड्स में
                 const durationFormatted = targetSecs >= 60 ? `${Math.floor(targetSecs / 60)} min` : `${targetSecs}s`;
 
                 const eventName = task?.event_name ?? task?.type ?? taskName;
@@ -211,10 +209,13 @@ export class QuestManager {
                 .setFooter({ text: 'InSaNe DyNaStY • Next-Gen AI Auto Runner V3' })
                 .setTimestamp();
 
+            // FIX: Ensure it updates the existing message instead of sending new ones
             if (sessionMessageRef.msg) {
-                await sessionMessageRef.msg.edit({ embeds: [embed] }).catch(async () => {
+                try {
+                    sessionMessageRef.msg = await sessionMessageRef.msg.edit({ embeds: [embed] });
+                } catch (err) {
                     sessionMessageRef.msg = await channel.send({ embeds: [embed] }).catch(() => null);
-                });
+                }
             } else {
                 sessionMessageRef.msg = await channel.send({ embeds: [embed] }).catch(() => null);
             }
