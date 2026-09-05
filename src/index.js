@@ -96,7 +96,7 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands) - Prevented duplicate triggers
+// Message Handler (Prefix Commands) - Strict single execution
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -145,23 +145,18 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Clean and safe command loader to avoid multiple executions
+// Clean and safe command loader (Only Default Export to prevent triple triggers)
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
     
     if (mod.default) {
         const cmd = mod.default;
-        if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
-        if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
-    }
-
-    // Safely load named exports without duplicating core handlers
-    for (const [key, cmd] of Object.entries(mod)) {
-        if (['default', 'makeTokenStore', 'handleLinkModal', 'handleLinkPromptButton', 'handlePlatformButton', 'runAutoquestForUser'].includes(key)) continue;
-        if (cmd && typeof cmd === 'object') {
-            if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
-            if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
+        if (cmd?.data?.name) {
+            client.commands.set(cmd.data.name, cmd);
+        }
+        if (cmd?.prefix) {
+            client.prefixCommands.set(cmd.prefix, cmd);
         }
     }
 }
