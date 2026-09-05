@@ -142,7 +142,7 @@ export class QuestManager {
         } catch {}
     }
 
-    // Live Dashboard Generator - Single Message Edition (Spam Fixed)
+    // Live Dashboard Generator - Single Message Edition (Spam Fixed & Username Fix)
     static async updateSessionBox(channel, questList, sessionMessageRef = { msg: null }, userName = 'User') {
         if (!channel) return sessionMessageRef.msg;
         try {
@@ -214,7 +214,6 @@ export class QuestManager {
                     sessionMessageRef.msg = await sessionMessageRef.msg.edit({ embeds: [embed] });
                     return sessionMessageRef.msg;
                 } catch (err) {
-                    // Agar message delete ho gaya ho (10008) tabhi naya banayein, warna spam rokein
                     if (err.code === 10008 || err.status === 404) {
                         sessionMessageRef.msg = null;
                     } else {
