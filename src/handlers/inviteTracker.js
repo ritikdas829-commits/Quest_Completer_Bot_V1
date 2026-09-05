@@ -132,12 +132,18 @@ export async function handleInviteLeave(member) {
                 if (targetRole) {
                     const inviterMember = await guild.members.fetch(inviterId).catch(() => null);
                     
-                    if (inviterMember && data.count < 2) {
-                        if (inviterMember.roles.cache.has(targetRole.id)) {
-                            await inviterMember.roles.remove(targetRole).catch(() => {});
-                            try {
-                                await inviterMember.send(`⚠️ One of your invited members left the server. Your active invite count dropped below 2, so your Quest Access has been locked.`);
-                            } catch {}
+                    if (inviterMember) {
+                        // FIX: Role tabhi hatega jab count 2 se kam (< 2) ho (jaise 2 se 1 hona).
+                        // Agar count 2 ya usse zyada hai (jaise 9 se 8 hona), toh role safe rahega!
+                        if (data.count < 2) {
+                            if (inviterMember.roles.cache.has(targetRole.id)) {
+                                await inviterMember.roles.remove(targetRole).catch(() => {});
+                                try {
+                                    await inviterMember.send(`⚠️ One of your invited members left the server. Your active invite count dropped to **${data.count}** (below 2), so your Quest Access has been locked.`);
+                                } catch {}
+                            }
+                        } else {
+                            console.log(`User ${inviterId} lost an invite, but their count is still ${data.count}. Role is safe.`);
                         }
                     }
                 }
