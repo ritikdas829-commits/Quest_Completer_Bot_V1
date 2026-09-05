@@ -43,7 +43,10 @@ if (!existsSync('tokens.json'))    writeFileSync('tokens.json', '{}');
 if (!existsSync('autoquest.json')) writeFileSync('autoquest.json', '[]');
 
 banner();
-await deployCommands(TOKEN, process.env.DISCORD_CLIENT_ID);
+
+// Startup crash fix: Commented out automatic command deployment on every boot 
+// to prevent Railway SIGTERM / timeout container crashes.
+// await deployCommands(TOKEN, process.env.DISCORD_CLIENT_ID);
 
 const client = new Client({
     intents: [
@@ -182,4 +185,3 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(TOKEN);
-
