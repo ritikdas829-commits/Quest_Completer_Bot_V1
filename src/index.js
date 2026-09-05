@@ -57,16 +57,15 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel],
 });
 
-client.commands       = new Collection();
-client.prefixCommands = new Collection();
-client.tokenStore     = makeTokenStore(TOKEN);
+client.commands   = new Collection();
+client.tokenStore = makeTokenStore(TOKEN);
 
 global.AUTO_ROLE_ID = null;
 
 client.once('clientReady', async () => {
     await cacheGuildInvites(client);
 
-    client.user.setActivity('Quest Completer V3 | .help', { type: ActivityType.Watching });
+    client.user.setActivity('Quest Completer V3', { type: ActivityType.Watching });
     
     client.guilds.cache.forEach(async (guild) => {
         try {
@@ -96,36 +95,26 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands)
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    if (message.commandProcessed) return;
-
-    const prefix = '.'; 
-    
-    if (message.content.startsWith(prefix)) {
-        const args = message.content.slice(prefix.length).trim().split(/ +/);
-        const commandName = args.shift().toLowerCase();
-
-        const command = client.prefixCommands.get(commandName);
-        if (command) {
-            message.commandProcessed = true;
-            try {
-                if (command.prefixExecute) {
-                    await command.prefixExecute(message, args, client);
-                } else {
-                    await command.execute(message, client);
-                }
-            } catch (error) {
-                console.error(error);
-                await message.reply('There was an error executing that command!').catch(() => {});
-            }
-            return;
-        }
-    }
-});
-
+// Slash Commands & Button Interactions Handler
 client.on('interactionCreate', async (interaction) => {
+    if (interaction.isChatInputCommand()) {
+        const command = client.commands.get(interaction.commandName);
+        if (!command) return;
+
+        try {
+            await command.execute(interaction, client);
+        } catch (error) {
+            console.error(error);
+            const errorMessage = { content: 'There was an error executing this command!', ephemeral: true };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage).catch(() => {});
+            } else {
+                await interaction.reply(errorMessage).catch(() => {});
+            }
+        }
+        return;
+    }
+
     if (!interaction.isButton()) return;
 
     if (interaction.customId === 'refresh_status') {
@@ -150,10 +139,8 @@ client.on('interactionCreate', async (interaction) => {
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
-    if (mod.default) {
-        const cmd = mod.default;
-        if (cmd?.data)   client.commands.set(cmd.data.name, cmd);
-        if (cmd?.prefix) client.prefixCommands.set(cmd.prefix, cmd);
+    if (mod.default && mod.default.data) {
+        client.commands.set(mod.default.data.name, mod.default);
     }
 }
 
@@ -168,7 +155,7 @@ for (const file of eventFiles) {
     }
 }
 
-// Global Crash Handlers to prevent unexpected bot shutdowns
+// Global Crash Handlers
 process.on('unhandledRejection', (reason, promise) => {
     console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
 });
