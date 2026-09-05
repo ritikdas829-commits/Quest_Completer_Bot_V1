@@ -96,7 +96,7 @@ client.on('guildMemberRemove', (member) => {
     handleInviteLeave(member);
 });
 
-// Message Handler (Prefix Commands)
+// Smart Message Handler (Prefix & Slash Fallback Support)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -106,16 +106,19 @@ client.on('messageCreate', async (message) => {
         const args = message.content.slice(prefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
 
-        const command = client.prefixCommands.get(commandName);
+        // Check both prefixCommands and standard client.commands collection
+        const command = client.prefixCommands.get(commandName) || client.commands.get(commandName);
         if (command) {
             try {
-                if (command.prefixExecute) {
+                if (typeof command.prefixExecute === 'function') {
                     await command.prefixExecute(message, args, client);
-                } else if (command.execute) {
+                } else if (typeof command.execute === 'function') {
                     await command.execute(message, client);
+                } else if (typeof command.default === 'function') {
+                    await command.default(message, args, client);
                 }
             } catch (error) {
-                console.error(error);
+                console.error(`Error executing prefix command ${commandName}:`, error);
                 await message.reply('There was an error executing that command!').catch(() => {});
             }
             return;
@@ -145,7 +148,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Fixed Command Loader (Registers both slash commands and maps them as prefix commands automatically)
+// Fixed Command Loader
 const commandFiles = readdirSync(join(__dirname, 'commands')).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
     const mod = await import(pathToFileURL(join(__dirname, 'commands', file)).href);
@@ -154,7 +157,7 @@ for (const file of commandFiles) {
         const cmd = mod.default;
         if (cmd?.data?.name) {
             client.commands.set(cmd.data.name, cmd);
-            client.prefixCommands.set(cmd.data.name, cmd); // यह सुनिश्चित करता है कि प्रिफिक्स कमांड काम करे
+            client.prefixCommands.set(cmd.data.name, cmd);
         }
         if (cmd?.prefix) {
             client.prefixCommands.set(cmd.prefix, cmd);
