@@ -220,7 +220,7 @@ function buildErrorCard(err) {
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
 
-async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
+async function runQuestAll(userId, tokenStore, channel, send, discordClient, username = 'User') {
     const token = tokenStore.get(userId);
     if (!token) { await send(buildLinkPrompt()).catch(() => {}); return false; }
 
@@ -230,12 +230,12 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
         const valid = manager.filterQuestsValid();
         if (valid.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return false; }
 
-        QuestManager.activeSessionMessage = null;
-        await QuestManager.updateSessionBox(channel, valid);
+        const sessionRef = { msg: null };
+        await QuestManager.updateSessionBox(channel, valid, sessionRef, username);
 
-        await Promise.all(
-            valid.map((quest) => manager.doingQuest(quest, channel, userId, valid))
-        );
+        for (const quest of valid) {
+            await manager.doingQuest(quest, channel, userId, valid, sessionRef, username);
+        }
 
         await manager.claimRewards(console.log).catch(() => 0);
 
@@ -271,8 +271,8 @@ async function runQuestAll(userId, tokenStore, channel, send, discordClient) {
     }
 }
 
-async function runQuestOne(userId, tokenStore, channel, send, discordClient) {
-    return runQuestAll(userId, tokenStore, channel, send, discordClient);
+async function runQuestOne(userId, tokenStore, channel, send, discordClient, username = 'User') {
+    return runQuestAll(userId, tokenStore, channel, send, discordClient, username);
 }
 
 async function runQuestList(userId, tokenStore, send) {
@@ -412,11 +412,11 @@ export const questCmd = {
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply().catch(() => {});
-        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client);
+        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client, interaction.user.username);
     },
     async prefixExecute(message, _args, client) {
         if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
-        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), client);
+        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), client, message.author.username);
     },
 };
 
@@ -426,11 +426,11 @@ export const questAllCmd = {
     async execute(interaction, client) {
         if (!checkUserAccess(interaction.member, interaction)) { await sendAccessDenied(interaction); return; }
         await interaction.deferReply().catch(() => {});
-        await runQuestAll(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client);
+        await runQuestAll(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.followUp(opts), client, interaction.user.username);
     },
     async prefixExecute(message, _args, client) {
         if (!checkUserAccess(message.member, message)) { await sendAccessDenied(message, false); return; }
-        await runQuestAll(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), client);
+        await runQuestAll(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), client, message.author.username);
     },
 };
 
@@ -650,3 +650,4 @@ export async function runAutoquestForUser(userId, quest, tokenStore, discordClie
         console.error(`[AutoQuest V3:${userId}] Error:`, err?.message);
     }
 }
+
