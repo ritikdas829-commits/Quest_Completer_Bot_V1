@@ -280,17 +280,25 @@ export class QuestManager {
                             timestamp: secondsDone,
                             task_id: currentTaskId,
                         };
-                        if (eventName) payload.event_name = eventName;
+                        if (eventName) {
+                            payload.event_name = eventName;
+                        }
 
                         const res = await this.#safeRequest(() => 
                             this.client.post(`/quests/${quest.id}/video-progress`, payload)
                         );
-                        if (res) quest.updateUserStatus(extractStatus(res));
+                        
+                        if (res) {
+                            quest.updateUserStatus(extractStatus(res));
+                        }
 
-                        if (channel) await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef, userName);
+                        if (channel) {
+                            await QuestManager.updateSessionBox(channel, allQuests, sessionMessageRef, userName);
+                        }
+                        
                         if (quest.isCompleted()) break;
 
-                        secondsDone += Math.min(10, Math.max(5, Math.floor(targetSecs / 4)));
+                        secondsDone += 5;
                         if (secondsDone > targetSecs) secondsDone = targetSecs;
                     } catch (err) {
                         await this.#timeout(3000);
@@ -387,3 +395,4 @@ function readProgress(quest, eventName, taskName) {
     }
     return Number(val) || 0;
 }
+
