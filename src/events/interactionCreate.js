@@ -94,7 +94,7 @@ export default {
 
 
         // =========================================================
-        // BUTTON: REFRESH STATUS
+        // BUTTON: REFRESH STATUS (Fixed with deferUpdate)
         // =========================================================
 
         if (
@@ -102,6 +102,9 @@ export default {
             interaction.customId === 'refresh_status'
         ) {
             try {
+                // Timeout se bachne ke liye pehle hi update defer kar diya
+                await interaction.deferUpdate();
+
                 const user = interaction.user;
                 const member = interaction.member;
 
@@ -143,7 +146,7 @@ export default {
                             .setStyle(ButtonStyle.Secondary)
                     );
 
-                await interaction.update({
+                await interaction.editReply({
                     embeds: [embed],
                     components: [row],
                 });
@@ -153,11 +156,6 @@ export default {
                     '[REFRESH STATUS ERROR]',
                     error
                 );
-
-                await sendInteractionError(
-                    interaction,
-                    '❌ Failed to refresh your status.'
-                );
             }
 
             return;
@@ -165,7 +163,7 @@ export default {
 
 
         // =========================================================
-        // BUTTON: CREATE TICKET
+        // BUTTON: CREATE TICKET (Fixed with deferReply)
         // =========================================================
 
         if (
@@ -185,6 +183,9 @@ export default {
             }
 
             try {
+                // Channel create hone mein time lagta hai isliye pehle defer kiya
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
                 // Safe channel name
                 const cleanUsername = member.user.username
                     .toLowerCase()
@@ -207,10 +208,9 @@ export default {
                     );
 
                 if (existingTicket) {
-                    await interaction.reply({
+                    await interaction.editReply({
                         content:
                             `⚠️ You already have an open ticket: ${existingTicket}`,
-                        flags: MessageFlags.Ephemeral,
                     });
 
                     return;
@@ -260,13 +260,12 @@ export default {
 
 
                 // -------------------------------------------------
-                // Reply to user
+                // Reply to user via editReply
                 // -------------------------------------------------
 
-                await interaction.reply({
+                await interaction.editReply({
                     content:
                         `✅ Your ticket channel has been created successfully: ${ticketChannel}`,
-                    flags: MessageFlags.Ephemeral,
                 });
 
 
@@ -298,10 +297,11 @@ export default {
                     error
                 );
 
-                await sendInteractionError(
-                    interaction,
-                    '❌ Failed to create a ticket channel. Please contact an admin.'
-                );
+                if (interaction.deferred) {
+                    await interaction.editReply({
+                        content: '❌ Failed to create a ticket channel. Please contact an admin.',
+                    }).catch(() => {});
+                }
             }
 
             return;
