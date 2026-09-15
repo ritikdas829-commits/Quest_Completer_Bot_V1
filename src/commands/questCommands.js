@@ -619,9 +619,9 @@ export const guideCmd = {
         const guideContainer = new ContainerBuilder().setAccentColor(0x5865F2);
         guideContainer.addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-                `# 👑 Script Help\n\n` +
+                `# 👑 Script Help & Guide\n\n` +
                 `Use the guide below to get your Discord token for quest completion.\n\n` +
-                `Choose the device you want to use to get your token. After you click one of the buttons below, I will send you the complete steps and script.`
+                `Choose the device you want to use to get your token by clicking the buttons below:`
             ),
         );
 
@@ -632,27 +632,24 @@ export const guideCmd = {
         );
 
         try {
-            await interaction.user.send({ 
-                components: [guideContainer, platformRow], 
+            await interaction.editReply({ 
+                content: `🌐 **Join our support server:** https://discord.gg/ZpvmmyHb3Q`,
+                components: [guideContainer, platformRow],
                 flags: MessageFlags.IsComponentsV2 
             });
-            
-            await interaction.user.send({ 
-                content: `🌐 **Join our support server:**\nhttps://discord.gg/ZpvmmyHb3Q` 
-            });
-
-            await interaction.editReply({ content: `📭 I have sent you the guide and server link via Direct Message (DM)!` });
         } catch (err) {
-            await interaction.editReply({ content: `❌ Your DMs are closed! Please open your DMs to receive the guide.` });
+            console.error('[Guide Command Error]:', err);
         }
     },
     async prefixExecute(message, _args, client) {
+        if (!await checkQuestChannel(message)) return;
+
         const guideContainer = new ContainerBuilder().setAccentColor(0x5865F2);
         guideContainer.addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-                `# 👑 Script Help\n\n` +
+                `# 👑 Script Help & Guide\n\n` +
                 `Use the guide below to get your Discord token for quest completion.\n\n` +
-                `Choose the device you want to use to get your token. After you click one of the buttons below, I will send you the complete steps and script.`
+                `Choose the device you want to use to get your token by clicking the buttons below:`
             ),
         );
 
@@ -663,23 +660,13 @@ export const guideCmd = {
         );
 
         try {
-            await message.author.send({ 
-                components: [guideContainer, platformRow], 
+            await message.reply({ 
+                content: `🌐 **Join our support server:** https://discord.gg/ZpvmmyHb3Q`,
+                components: [guideContainer, platformRow],
                 flags: MessageFlags.IsComponentsV2 
             });
-
-            await message.author.send({ 
-                content: `🌐 **Join our support server:**\nhttps://discord.gg/ZpvmmyHb3Q` 
-            });
-
-            if (message.guild) {
-                const replyMsg = await message.reply({ content: `📭 I have sent you the guide via Direct Message (DM)!` });
-                setTimeout(() => replyMsg.delete().catch(() => {}), 5000);
-            }
         } catch (err) {
-            if (message.guild) {
-                await message.reply('❌ Your Direct Messages (DMs) are closed! Please check your privacy settings.').catch(() => {});
-            }
+            console.error('[Guide Prefix Error]:', err);
         }
     },
 };
@@ -816,4 +803,4 @@ export async function runAutoquestForUser(userId, tokenStore) {
     } catch (err) {
         console.error(`[AutoQuest Error for ${userId}]:`, err?.message);
     }
-                }
+}
