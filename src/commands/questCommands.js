@@ -17,7 +17,6 @@ import { QuestClient } from '../quest/questClient.js';
 import { TokenStore } from '../quest/tokenStore.js';
 import { enableAutoquest, disableAutoquest, isAutoquestEnabled } from '../quest/autoquestStore.js';
 import { PREFIX } from '../utils/config.js';
-import { QuestManager } from '../quest/questManager.js';
 
 const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
 let dbInstance;
@@ -232,38 +231,6 @@ async function buildMultiSlotPanel(userId, member, tokenStore) {
     };
 }
 
-function buildQuestDashboardCard(questData) {
-    const gameTitle = questData?.config?.messages?.game_title || 'Game of Thrones: Dragonfire';
-    const publisher = questData?.config?.messages?.publisher || 'Warner Bros. International Enterprises';
-    const questName = questData?.config?.messages?.quest_name || 'Game of Thrones: Dragonfire';
-    
-    const c = new ContainerBuilder().setAccentColor(0x5865F2);
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `# 🛡️ Quest Execution Panel\n\n` +
-            `• **Game:** ${gameTitle}\n` +
-            `• **Publisher:** ${publisher}\n` +
-            `• **Quest:** ${questName}\n` +
-            `• **Status:** 🔄 Ready to start\n\n` +
-            `### 💎 Rewards:\n` +
-            `• 200 Orbs`
-        ),
-    );
-
-    const actionRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('quest_start').setLabel('Start Quest').setStyle(ButtonStyle.Success).setEmoji('▶️'),
-        new ButtonBuilder().setCustomId('quest_stop').setLabel('Stop').setStyle(ButtonStyle.Danger).setEmoji('⏹️'),
-        new ButtonBuilder().setCustomId('quest_refresh').setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji('🔄'),
-    );
-
-    const logsContainer = new ContainerBuilder().setAccentColor(0x2b2d31);
-    logsContainer.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`# 🗂️ Live Logs\n⏳ Waiting for execution...`),
-    );
-
-    return { components: [c, logsContainer], componentsV2: [actionRow], flags: MessageFlags.IsComponentsV2 };
-}
-
 function buildLinkModal(slotId = '1') {
     const modal = new ModalBuilder().setCustomId(`link_token_modal_${slotId}`).setTitle(`Link Account (Slot ${slotId})`);
     modal.addComponents(
@@ -298,36 +265,10 @@ function buildErrorCard(err) {
     return { components: [c], flags: MessageFlags.IsComponentsV2 };
 }
 
-function buildQuestSelectCard(validQuests) {
-    const c = new ContainerBuilder().setAccentColor(0x5865F2);
-    c.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-            `# 🎮 Select Target Quest\nChoose a quest from the menu below to begin processing:`
-        ),
-    );
-
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('quest_select_menu')
-        .setPlaceholder('Choose a quest...')
-        .addOptions(
-            validQuests.slice(0, 25).map((q) => {
-                const questName = q.config?.messages?.quest_name || 'Unknown Quest';
-                const gameTitle = q.config?.messages?.game_title || 'Discord Quest';
-                return new StringSelectMenuOptionBuilder()
-                    .setLabel(questName.substring(0, 100))
-                    .setDescription(gameTitle.substring(0, 100))
-                    .setValue(q.id);
-            })
-        );
-
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-    return { components: [c], componentsV2: [row], flags: MessageFlags.IsComponentsV2 };
-}
-
-async function runQuestOne(userId, tokenStore, channel, send) {
+async function runQuestOne(userId, tokenStore, channel, send, member) {
     const token = await tokenStore.get(`${userId}_slot_1`) || await tokenStore.get(`${userId}_slot_2`) || await tokenStore.get(userId);
     if (!token) { 
-        const panel = await buildMultiSlotPanel(userId, channel.guild?.members?.cache?.get(userId), tokenStore);
+        const panel = await buildMultiSlotPanel(userId, member, tokenStore);
         await send(panel).catch(() => {}); 
         return false; 
     }
@@ -338,13 +279,9 @@ async function runQuestOne(userId, tokenStore, channel, send) {
         const valid = manager.filterQuestsValid();
         if (valid.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return false; }
 
-        if (valid.length === 1) {
-            await send(buildQuestDashboardCard(valid[0])).catch(() => null);
-            return true;
-        }
-
-        const selectPayload = buildQuestSelectCard(valid);
-        await send({ components: selectPayload.components, componentsV2: selectPayload.componentsV2 }).catch(() => null);
+        const c = new ContainerBuilder().setAccentColor(0x5865F2);
+        c.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🛡️ Quest Execution Triggered\nProcessing active quests for your linked account...`));
+        await send({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
         return true;
     } catch (err) {
         await send(buildErrorCard(err)).catch(() => {});
@@ -352,86 +289,16 @@ async function runQuestOne(userId, tokenStore, channel, send) {
     }
 }
 
-async function runQuestList(userId, tokenStore, send, member) {
-    const token = await tokenStore.get(`${userId}_slot_1`) || await tokenStore.get(`${userId}_slot_2`) || await tokenStore.get(userId);
-    if (!token) { 
-        const panel = await buildMultiSlotPanel(userId, member, tokenStore);
-        await send(panel).catch(() => {}); 
-        return; 
-    }
-
-    const qc = new QuestClient(token);
-    try {
-        const manager = await qc.fetchQuests();
-        const all = manager.list();
-        if (all.length === 0) { await send(buildNoQuestsCard()).catch(() => {}); return; }
-
-        for (const q of all.slice(0, 10)) {
-            await send(buildQuestDashboardCard(q)).catch(() => {});
-        }
-    } catch (err) {
-        await send(buildErrorCard(err)).catch(() => {});
-    }
-}
-
-async function runTokenCheck(userId, tokenStore, replyFn, member) {
-    const token = await tokenStore.get(`${userId}_slot_1`) || await tokenStore.get(`${userId}_slot_2`) || await tokenStore.get(userId);
-    if (!token) {
-        const panel = await buildMultiSlotPanel(userId, member, tokenStore);
-        await replyFn(panel).catch(() => {});
-        return;
-    }
-
-    let valid = false, accountName = '';
-    try {
-        const res = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: token } });
-        valid = res.ok;
-        if (res.ok) {
-            const data = await res.json();
-            accountName = data.global_name || data.username || '';
-        }
-    } catch { valid = false; }
-
-    const c = new ContainerBuilder().setAccentColor(valid ? 0x57F287 : 0xED4245);
-    c.addTextDisplayComponents(new TextDisplayBuilder().setContent(valid ? `# ✅ Token Active\nVerified account: **"${accountName}"**.` : `# ❌ Token Expired / Invalid`));
-    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
-    if (!valid) {
-        await tokenStore.remove(`${userId}_slot_1`);
-        await tokenStore.remove(`${userId}_slot_2`);
-    }
-}
-
-async function runAutoquestToggle(userId, tokenStore, replyFn, member) {
-    const token = await tokenStore.get(`${userId}_slot_1`) || await tokenStore.get(`${userId}_slot_2`) || await tokenStore.get(userId);
-    if (!token) {
-        const panel = await buildMultiSlotPanel(userId, member, tokenStore);
-        await replyFn(panel).catch(() => {});
-        return;
-    }
-
-    if (await isAutoquestEnabled(userId)) {
-        await disableAutoquest(userId);
-        const c = new ContainerBuilder().setAccentColor(0xFEE75C);
-        c.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🤖 Auto-Quest Deactivated`));
-        await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
-        return;
-    }
-    await enableAutoquest(userId);
-    const c = new ContainerBuilder().setAccentColor(0x57F287);
-    c.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🤖 Auto-Quest Activated Successfully!`));
-    await replyFn({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
-}
-
 export const questCmd = {
     data: new SlashCommandBuilder().setName('quest').setDescription('Complete available Discord quests'),
     prefix: 'quest',
     async execute(interaction, client) {
         if (!await checkQuestChannel(interaction)) return;
-        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.editReply(opts));
+        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.editReply(opts), interaction.member);
     },
     async prefixExecute(message, _args, client) {
         if (!await checkQuestChannel(message)) return;
-        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts));
+        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), message.member);
     },
 };
 
@@ -440,50 +307,11 @@ export const questAllCmd = {
     prefix: 'q',
     async execute(interaction, client) {
         if (!await checkQuestChannel(interaction)) return;
-        await interaction.editReply({ content: `✅ All quests process triggered.` }).catch(() => {});
+        await runQuestOne(interaction.user.id, client.tokenStore, interaction.channel, (opts) => interaction.editReply(opts), interaction.member);
     },
     async prefixExecute(message, _args, client) {
         if (!await checkQuestChannel(message)) return;
-        await message.reply({ content: `✅ All quests process triggered.` }).catch(() => {});
-    },
-};
-
-export const questListCmd = {
-    data: new SlashCommandBuilder().setName('questlist').setDescription('List all Discord quests'),
-    prefix: 'questlist',
-    async execute(interaction, client) {
-        if (!await checkQuestChannel(interaction)) return;
-        await runQuestList(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts), interaction.member);
-    },
-    async prefixExecute(message, _args, client) {
-        if (!await checkQuestChannel(message)) return;
-        await runQuestList(message.author.id, client.tokenStore, (opts) => message.channel.send(opts), message.member);
-    },
-};
-
-export const tokenCheckCmd = {
-    data: new SlashCommandBuilder().setName('tokencheck').setDescription('Check token validity'),
-    prefix: 'tokencheck',
-    async execute(interaction, client) {
-        if (!await checkQuestChannel(interaction)) return;
-        await runTokenCheck(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts), interaction.member);
-    },
-    async prefixExecute(message, _args, client) {
-        if (!await checkQuestChannel(message)) return;
-        await runTokenCheck(message.author.id, client.tokenStore, (opts) => message.reply(opts), message.member);
-    },
-};
-
-export const autoquestCmd = {
-    data: new SlashCommandBuilder().setName('autoquest').setDescription('Toggle auto-quest'),
-    prefix: 'autoquest',
-    async execute(interaction, client) {
-        if (!await checkQuestChannel(interaction)) return;
-        await runAutoquestToggle(interaction.user.id, client.tokenStore, (opts) => interaction.editReply(opts), interaction.member);
-    },
-    async prefixExecute(message, _args, client) {
-        if (!await checkQuestChannel(message)) return;
-        await runAutoquestToggle(message.author.id, client.tokenStore, (opts) => message.reply(opts), message.member);
+        await runQuestOne(message.author.id, client.tokenStore, message.channel, (opts) => message.channel.send(opts), message.member);
     },
 };
 
@@ -499,44 +327,6 @@ export const linkCmd = {
         if (!await checkQuestChannel(message)) return;
         const panel = await buildMultiSlotPanel(message.author.id, message.member, client.tokenStore);
         await message.reply(panel).catch(() => {});
-    },
-};
-
-export const unlinkCmd = {
-    data: new SlashCommandBuilder().setName('unlink').setDescription('Remove your saved Discord token'),
-    prefix: 'unlink',
-    async execute(interaction, client) {
-        if (!await checkQuestChannel(interaction)) return;
-        const ts = client.tokenStore;
-        await ts.remove(`${interaction.user.id}_slot_1`);
-        await ts.remove(`${interaction.user.id}_slot_2`);
-        await ts.remove(interaction.user.id);
-        await disableAutoquest(interaction.user.id);
-        const c = new ContainerBuilder().setAccentColor(0xFEE75C).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🔓 All Tokens Unlinked Successfully`));
-        await interaction.editReply({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
-    },
-    async prefixExecute(message, _args, client) {
-        if (!await checkQuestChannel(message)) return;
-        const ts = client.tokenStore;
-        await ts.remove(`${message.author.id}_slot_1`);
-        await ts.remove(`${message.author.id}_slot_2`);
-        await ts.remove(message.author.id);
-        await disableAutoquest(message.author.id);
-        const c = new ContainerBuilder().setAccentColor(0xFEE75C).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🔓 All Tokens Unlinked Successfully`));
-        await message.reply({ components: [c], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
-    },
-};
-
-export const claimCmd = {
-    data: new SlashCommandBuilder().setName('claim').setDescription('Manually claim pending rewards'),
-    prefix: 'claim',
-    async execute(interaction, client) {
-        if (!await checkQuestChannel(interaction)) return;
-        await interaction.editReply({ content: `✅ Rewards claim process triggered.` }).catch(() => {});
-    },
-    async prefixExecute(message, _args, client) {
-        if (!await checkQuestChannel(message)) return;
-        await message.reply({ content: `✅ Rewards claim process triggered.` }).catch(() => {});
     },
 };
 
@@ -565,16 +355,24 @@ export const guideCmd = {
                 new ButtonBuilder().setLabel('Watch Video Guide').setStyle(ButtonStyle.Link).setURL('https://youtube.com/your-tutorial-link').setEmoji('▶️')
             );
 
+            // Try sending to DM
             await interaction.user.send({ 
                 content: `🌐 **Join our support server:**\nhttps://discord.gg/ZpvmmyHb3Q\n\n🎥 **Video Tutorial:**\nhttps://youtube.com/your-tutorial-link\n\n📜 **Console Script / Guide:**\n\`\`\`javascript\n// Paste this token extraction snippet in your browser console\nwindow.webpackChunkdiscord_app.push([[Math.random()],{},req=>{for(const m of Object.keys(req.c)){let o=req.c[m].exports;if(o&&o.default&&void 0!==o.default.getToken){console.log(o.default.getToken());break;}}]);\n\`\`\``,
                 components: [guideContainer], 
                 componentsV2: [deviceRow, linkRow], 
                 flags: MessageFlags.IsComponentsV2 
-            }).catch(() => {});
+            }).catch(async () => {
+                // Fallback if DM is closed
+                await interaction.editReply({ 
+                    content: `❌ **DMs Closed!** I couldn't send you a direct message. Please enable your DMs.\nHere is your link instead: https://youtube.com/your-tutorial-link`,
+                    flags: MessageFlags.Ephemeral 
+                }).catch(() => {});
+                return;
+            });
 
             await interaction.editReply({ content: `📭 I have sent the guide, scripts, and buttons directly to your DMs!`, flags: MessageFlags.Ephemeral }).catch(() => {});
         } catch (err) {
-            await interaction.editReply({ content: `❌ Could not send you a DM. Please make sure your DMs are open!`, flags: MessageFlags.Ephemeral }).catch(() => {});
+            await interaction.editReply({ content: `❌ Could not process guide command.`, flags: MessageFlags.Ephemeral }).catch(() => {});
         }
     },
     async prefixExecute(message, _args, client) {
@@ -604,11 +402,14 @@ export const guideCmd = {
                 components: [guideContainer], 
                 componentsV2: [deviceRow, linkRow], 
                 flags: MessageFlags.IsComponentsV2 
-            }).catch(() => {});
+            }).catch(async () => {
+                await message.reply({ content: `❌ **DMs Closed!** Please enable your DMs to receive instructions.` }).catch(() => {});
+                return;
+            });
 
             await message.reply({ content: `📭 Check your DMs for instructions and scripts!` }).catch(() => {});
         } catch (err) {
-            await message.reply({ content: `❌ Could not send you a DM. Please enable your DMs!` }).catch(() => {});
+            await message.reply({ content: `❌ Could not send you a DM.` }).catch(() => {});
         }
     },
 };
@@ -649,13 +450,6 @@ export async function handleSlotButtonAction(interaction, client) {
     }
 }
 
-export async function handleSlotSelectMenu(interaction, client) {
-    await handleSlotButtonAction(interaction, client);
-}
-export async function handleLinkPromptButton(interaction, client) {
-    await handleSlotButtonAction(interaction, client);
-}
-
 export async function handlePlatformButton(interaction) {
     const customId = interaction.customId;
     if (customId === 'device_ios') {
@@ -670,23 +464,9 @@ export async function handlePlatformButton(interaction) {
         }).catch(() => {});
     } else if (customId === 'device_computer') {
         await interaction.reply({ 
-            content: `💻 **Computer Guide & Script:**\n1. Open Discord in Chrome/Firefox/Edge.\n2. Press \`Ctrl+Shift+I\` to open Developer Tools.\n3. Go to the **Network** tab, type \`api/v10/users/@me\` in filter, refresh, click the request, and check headers for **Authorization**.\nAlternatively, run the script in the **Console** tab.`, 
+            content: `💻 **Computer Guide & Script:**\n1. Open Discord in Chrome/Firefox/Edge.\n2. Press \`Ctrl+Shift+I\` to open Developer Tools.\n3. Go to the **Network** tab, type \`api/v10/users/@me\` in filter, refresh, click the request, and check headers for **Authorization**.`, 
             flags: MessageFlags.Ephemeral 
         }).catch(() => {});
-    } else {
-        await interaction.reply({ content: `ℹ️ Platform setup guide selected.`, flags: MessageFlags.Ephemeral }).catch(() => {});
-    }
-}
-
-export async function runAutoquestForUser(userId, quest, tokenStore, client) {
-    const token = await tokenStore.get(`${userId}_slot_1`) || await tokenStore.get(`${userId}_slot_2`) || await tokenStore.get(userId);
-    if (!token) return;
-
-    const qc = new QuestClient(token);
-    try {
-        console.log(`[Autoquest] Running quest ${quest.id} for user ${userId}`);
-    } catch (err) {
-        console.error(`[Autoquest Error] For user ${userId}:`, err);
     }
 }
 
@@ -721,17 +501,4 @@ export async function handleLinkModal(interaction, client) {
 
     await ts.save(`${interaction.user.id}_slot_${slotId}`, token);
     await interaction.editReply({ components: [new ContainerBuilder().setAccentColor(0x57F287).addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ✅ Successfully Linked to Slot ${slotId} as **"${accountName}"**`))], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
-}
-
-export async function handleDashboardButtons(interaction) {
-    const customId = interaction.customId;
-    if (!['quest_start', 'quest_stop', 'quest_refresh'].includes(customId)) return;
-
-    if (customId === 'quest_start') {
-        await interaction.reply({ content: '▶️ Quest solver started successfully!', flags: MessageFlags.Ephemeral }).catch(() => {});
-    } else if (customId === 'quest_stop') {
-        await interaction.reply({ content: '⏹️ Quest solver stopped.', flags: MessageFlags.Ephemeral }).catch(() => {});
-    } else if (customId === 'quest_refresh') {
-        await interaction.reply({ content: '🔄 Dashboard refreshed!', flags: MessageFlags.Ephemeral }).catch(() => {});
-    }
 }
