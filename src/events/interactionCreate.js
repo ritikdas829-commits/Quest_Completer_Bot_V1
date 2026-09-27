@@ -1,10 +1,17 @@
 import { getEmoji } from '../handlers/emoji.js';
 import { handleLinkModal, handleLinkPromptButton } from '../commands/questCommands.js';
+import { handleGuideButtons } from '../commands/guide.js';
 
 export default {
     name: 'interactionCreate',
     once: false,
     async execute(interaction, client) {
+
+        // Guide Buttons handler (btn_pc, btn_android, btn_ios)
+        if (interaction.isButton() && (interaction.customId === 'btn_pc' || interaction.customId === 'btn_android' || interaction.customId === 'btn_ios')) {
+            await handleGuideButtons(interaction);
+            return;
+        }
 
         // Modal: link token
         if (interaction.isModalSubmit() && interaction.customId === 'link_token_modal') {
